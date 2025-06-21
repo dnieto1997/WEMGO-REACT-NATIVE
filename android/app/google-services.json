@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "799900611003",
+    "project_id": "wemgo-ca27f",
+    "storage_bucket": "wemgo-ca27f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:799900611003:android:f3feb3f9d19e3f08a9149e",
+        "android_client_info": {
+          "package_name": "com.wemgo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXta-W2q7Tx5D107lX_85Bad0e9ksWuII"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
