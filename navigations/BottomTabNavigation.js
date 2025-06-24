@@ -42,29 +42,8 @@ const screenOptions = {
 
 const BottomTabNavigation = () => {
   return (
-    <Tab.Navigator screenOptions={screenOptions} initialRouteName="Main">
-      <Tab.Screen
-        name="Explore"
-        component={SearchEvent}
-        options={{
-          unmountOnBlur: false,
-          tabBarIcon: ({focused}) => {
-            return (
-              <View
-                style={{
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                <MaterialCommunityIcons
-                  name="calendar-outline"
-                  color={focused ? '#944af5' : COLORS.black}
-                  size={30}
-                />
-              </View>
-            );
-          },
-        }}
-      />
+    <Tab.Navigator screenOptions={screenOptions} initialRouteName="Event">
+
       <Tab.Screen
         name="Event"
         component={HomeV1}
@@ -85,6 +64,29 @@ const BottomTabNavigation = () => {
                 }}>
                 <MaterialCommunityIcons
                   name="home"
+                  color={focused ? '#944af5' : COLORS.black}
+                  size={30}
+                />
+              </View>
+            );
+          },
+        }}
+      />
+
+            <Tab.Screen
+        name="Explore"
+        component={SearchEvent}
+        options={{
+          unmountOnBlur: false,
+          tabBarIcon: ({focused}) => {
+            return (
+              <View
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <MaterialCommunityIcons
+                  name="calendar-outline"
                   color={focused ? '#944af5' : COLORS.black}
                   size={30}
                 />

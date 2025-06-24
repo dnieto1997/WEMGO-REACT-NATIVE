@@ -24,6 +24,7 @@ const CreateEventV2 = () => {
   const [caption, setCaption] = useState('');
   const [loading, setLoading] = useState(false);
   const [cameraModalVisible, setCameraModalVisible] = useState(false);
+  const [hasSentFeed, setHasSentFeed] = useState(false);
 
 
   
@@ -74,14 +75,17 @@ const CreateEventV2 = () => {
     setSelectedMedia(prev => prev.filter((_, i) => i !== index));
   };
 
- const handleUpload = async () => {
-  if (loading) return; // 🚫 Evitar doble envío
+
+const handleUpload = async () => {
+  if (loading) return;
+
   if (selectedMedia.length === 0) {
     Alert.alert('Error', 'Debe seleccionar al menos una imagen o video.');
     return;
   }
 
   setLoading(true);
+  let alreadySent = false; // ✅ Local y confiable
 
   try {
     const formData = new FormData();
@@ -90,7 +94,7 @@ const CreateEventV2 = () => {
       formData.append('feed', {
         uri: media.uri,
         type: media.type,
-        name: media.fileName || `media_${Date.now()}_${index}`
+        name: media.fileName || `media_${Date.now()}_${index}`,
       });
     });
 
@@ -98,12 +102,14 @@ const CreateEventV2 = () => {
 
     const response = await postHttpsStories('feed', formData, true);
 
-    if (socket) {
+    if (socket && !alreadySent) {
+       console.log('🟢 Enviando newFeed (primer intento)');
       sendNewFeed({
         id: response.data.result.id,
         user: response.data.result.user,
         description: caption,
       });
+      alreadySent = true;
     }
 
     Alert.alert('Éxito', 'Publicación subida correctamente.');
@@ -125,19 +131,21 @@ const CreateEventV2 = () => {
             retryFormData.append('feed', {
               uri: media.uri,
               type: media.type,
-              name: media.fileName || `media_${Date.now()}_${index}`
+              name: media.fileName || `media_${Date.now()}_${index}`,
             });
           });
           retryFormData.append('description', caption);
 
           const retryResponse = await postHttpsStories('feed', retryFormData, true);
 
-          if (socket) {
+          if (socket && !alreadySent) {
+             console.log('🟠 Enviando newFeed (segundo intento)');
             sendNewFeed({
               id: retryResponse.data.result.id,
               user: retryResponse.data.result.user,
               description: caption,
             });
+            alreadySent = true;
           }
 
           Alert.alert('Éxito', 'Publicación subida en segundo intento.');
@@ -160,6 +168,7 @@ const CreateEventV2 = () => {
     }
   }
 };
+
 
 
   return (

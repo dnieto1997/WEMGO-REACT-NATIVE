@@ -2,7 +2,7 @@ import messaging from '@react-native-firebase/messaging';
 import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 import { navigate } from './NavigationService';
 
-// Maneja clic en la notificación
+// 🔗 Maneja el clic en la notificación
 const onNotificationClick = async data => {
   if (!data) return;
   console.log('🔗 Clic en notificación:', data);
@@ -15,7 +15,7 @@ const onNotificationClick = async data => {
   }
 
   const { type, ...params } = data;
-
+             console.log("data",extraData)
   switch (type) {
     case 'message':
       navigate('MessageDetails', { id: extraData.senderId });
@@ -28,6 +28,13 @@ const onNotificationClick = async data => {
       break;
     case 'feed_notification':
       navigate('Post', { id: extraData.id });
+      break
+       case 'reaction_feed':
+      navigate('Post', { id: extraData.feedId });
+      break;
+
+       case 'follow_user':
+      navigate('FriendTimeline', { id: extraData.follower.id });
       break;
     default:
       navigate('Home', { ...params, ...extraData });
@@ -35,8 +42,8 @@ const onNotificationClick = async data => {
   }
 };
 
-// Mostrar notificación local solo si tiene contenido
-export const showLocalNotification = async remoteMessage => {
+// 🔔 Muestra la notificación local (evita duplicados usando ID fijo)
+const showLocalNotification = async remoteMessage => {
   await notifee.requestPermission();
 
   const { title, body } = remoteMessage.notification || {};
@@ -54,6 +61,7 @@ export const showLocalNotification = async remoteMessage => {
   });
 
   await notifee.displayNotification({
+    id: 'feed_notification', // ✅ ID fijo evita acumulación de notificaciones duplicadas
     title: title || 'Nuevo Mensaje',
     body: body || 'Tienes un nuevo mensaje.',
     android: {
@@ -70,42 +78,57 @@ export const showLocalNotification = async remoteMessage => {
   });
 };
 
-// Configura todos los listeners
+// 📥 Configura todos los listeners
 export const setupNotificationHandlers = () => {
-  // App abierta desde notificación (background)
+  // Usuario toca notificación con app en segundo plano
   messaging().onNotificationOpenedApp(remoteMessage => {
     if (remoteMessage?.data) {
       onNotificationClick(remoteMessage.data);
     }
   });
 
-  // App inicia desde cerrado (kill)
+  // App abierta desde estado cerrado por notificación
   messaging()
     .getInitialNotification()
     .then(remoteMessage => {
       if (remoteMessage?.data) {
         console.log('🔄 App abierta desde estado cerrado:', remoteMessage);
-        onNotificationClick(remoteMessage.data); // solo navegación
+        onNotificationClick(remoteMessage.data);
       }
     });
 
-  // Primer plano: mostrar manualmente
+  // Mensaje en primer plano: mostrar notificación manualmente
   messaging().onMessage(async remoteMessage => {
-    console.log('📩 Notificación en primer plano:', remoteMessage);
+    console.log('📩 Primer plano: mensaje recibido:', remoteMessage);
     await showLocalNotification(remoteMessage);
   });
 
-  // Segundo plano (background): también mostrar manualmente
+  // Mensaje recibido en segundo plano (con app abierta o minimizada)
   messaging().setBackgroundMessageHandler(async remoteMessage => {
     console.log('📥 Segundo plano: mensaje recibido:', remoteMessage);
+
+    // Evitar duplicar si FCM ya mostró la notificación (cuando viene con "notification" en el payload)
+    if (remoteMessage.notification) {
+      console.log('🛑 FCM ya mostró notificación. No se duplica.');
+      return;
+    }
+
     await showLocalNotification(remoteMessage);
   });
 
-  // Detecta clics en primer plano (notifee)
+  // Usuario toca notificación mientras app está en primer plano
   notifee.onForegroundEvent(({ type, detail }) => {
     if (type === EventType.PRESS) {
-      console.log('🖱️ Foreground: usuario tocó notificación:', detail.notification?.data);
+      console.log('🖱️ Foreground: usuario tocó notificación');
       onNotificationClick(detail.notification?.data);
     }
   });
 };
+
+// 🧠 Usuario toca notificación con la app cerrada (background event)
+notifee.onBackgroundEvent(async ({ type, detail }) => {
+  if (type === EventType.PRESS) {
+    console.log('🖱️ Background: usuario tocó notificación');
+    await onNotificationClick(detail.notification?.data);
+  }
+});

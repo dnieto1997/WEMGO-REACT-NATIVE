@@ -82,7 +82,7 @@ const AppNavigation = () => {
   const [isFirstLaunch, setIsFirstLaunch] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const {socket} = useContext(SocketContext);
+
 
   useEffect(() => {
     const checkAppStatus = async () => {

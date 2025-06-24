@@ -26,6 +26,7 @@ import {useFocusEffect} from '@react-navigation/native';
 import VideoPost from '../components/VideoPost';
 import { COLORS } from '../constants';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import Likes from '../components/Likes';
 
 const Post = ({navigation, route}) => {
   const {id} = route.params;
@@ -48,6 +49,9 @@ const Post = ({navigation, route}) => {
   const DEFAULT_VIDEO_RATIO = 1.0;
   const [visibleFeedId, setVisibleFeedId] = useState(null);
     const [showFullDescription, setShowFullDescription] = useState(false);
+     const [userFeedId, setUserFeedId] = useState(null);
+       const [currentFeedId, setCurrentFeedId] = useState(null);
+        const [isModalVisible2, setModalVisible2] = useState(false);
 
   const {listenForReactions, sendReactionNotification} =
     useContext(SocketContext);
@@ -161,6 +165,8 @@ const Post = ({navigation, route}) => {
       setLikeLoading(prev => ({...prev, [idFeed]: false}));
     }
   };
+
+  
 
   // Navegar al perfil según usuario
   const navigateToProfile = userId => {
@@ -401,29 +407,43 @@ const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
           />
         </View>
 
-        <View style={styles.interactionRow}>
-          <TouchableOpacity
-            onPress={() => handleClick(item.feed_id)}
-            disabled={likeLoading[item.feed_id]}
-            style={styles.likeContainer}>
-            <MaterialCommunityIcons
-              name="cards-heart-outline"
-              size={30}
-              color={item.userLiked ? 'red' : 'gray'}
-            />
-            <Text style={styles.likeText}>{item.likeCount}</Text>
-          </TouchableOpacity>
+    <View style={styles.interactionRow}>
+  {/* Corazón + número de likes */}
+  <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 20 }}>
+    <TouchableOpacity
+      onPress={() => handleClick(item.feed_id)}
+      disabled={likeLoading[item.feed_id]}
+      style={styles.likeContainer}
+    >
+      <MaterialCommunityIcons
+        name="cards-heart-outline"
+        size={30}
+        color={item.userLiked ? 'red' : 'gray'}
+      />
+    </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => {
-              setCommentFeedId(item.feed_id);
-              setModalVisible(true);
-            }}
-            style={styles.commentContainer}>
-            <MaterialCommunityIcons name="comment" size={30} color="white" />
-            <Text style={styles.likeText}>{item.commentCount}</Text>
-          </TouchableOpacity>
-        </View>
+    <TouchableOpacity    onPress={() => {
+                setUserFeedId(feed.userId);
+                setCurrentFeedId(feed.feed_id);
+                setModalVisible2(true);
+              }}>
+      <Text style={styles.likeText}>{item.likeCount}</Text>
+    </TouchableOpacity>
+  </View>
+
+  {/* Comentarios */}
+  <TouchableOpacity
+    onPress={() => {
+      setCommentFeedId(item.feed_id);
+      setModalVisible(true);
+    }}
+    style={styles.commentContainer}
+  >
+    <MaterialCommunityIcons name="comment" size={30} color="white" />
+    <Text style={styles.likeText}>{item.commentCount}</Text>
+  </TouchableOpacity>
+</View>
+
 
         <Text style={styles.profileName}>
           {`${item.users_first_name} ${item.users_last_name}`}
@@ -516,6 +536,13 @@ const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
         onClose={() => setImageViewVisible(false)}
       />
 
+          <Likes
+              feedId={currentFeedId}
+              isVisible={isModalVisible2}
+              feedOwnerId={userFeedId}
+              onClose={() => setModalVisible2(false)}
+            />
+
       <Tab />
     </SafeAreaView>
   );
@@ -549,13 +576,13 @@ const styles = StyleSheet.create({
   imageWrapper: {position: 'relative'},
   caption: {marginTop: 5, fontSize: 14, color: 'white'},
   dateText: {marginTop: 5, fontSize: 12, color: '#aaa'},
-  interactionRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginTop: 10,
-  },
-  likeContainer: {flexDirection: 'row', alignItems: 'center', marginRight: 15},
-  likeText: {fontSize: 14, marginLeft: 8, color: 'white'},
+interactionRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 8,
+},
+  likeContainer: {flexDirection: 'row', alignItems: 'center', padding: 4},
+  likeText: {fontSize: 20, marginLeft: 8, color: 'white'},
   commentContainer: {flexDirection: 'row', alignItems: 'center'},
   commentText: {fontSize: 14, marginLeft: 8, color: 'white'},
   imageCount: {

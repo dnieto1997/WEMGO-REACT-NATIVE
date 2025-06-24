@@ -33,7 +33,9 @@ import Likes from '../components/Likes';
 import HeaderHome from '../components/HeaderHome';
 import StoriesList from '../components/StoriesList';
 import FastImage from 'react-native-fast-image';
+
 const {width} = Dimensions.get('window');
+
 
 const ITEM_WIDTH = Dimensions.get('window').width - 40;
 
@@ -46,7 +48,7 @@ const HomeV1 = ({navigation, route}) => {
   const [stories, setStories] = useState([]);
   const [userFeedId, setUserFeedId] = useState(null);
   const [DataUser, setDataUser] = useState({});
-  const {sendReactionNotification} = useContext(SocketContext);
+  const {sendReactionNotification,sendToggleNotification} = useContext(SocketContext);
   const [showOptionsId, setShowOptionsId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [feedToDelete, setFeedToDelete] = useState(null);
@@ -64,10 +66,12 @@ const HomeV1 = ({navigation, route}) => {
   const flatListRef = useRef(null);
   const FIXED_HEIGHT = 450;
     const [loading, setLoading] = useState(true);
-
+      const [isFollowing, setIsFollowing] = useState(false);
+  const [Followers, setFollowers] = useState('');
   const [visibleFeedId, setVisibleFeedId] = useState(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const [followedIds, setFollowedIds] = useState([]);
 
   const isVideo = url => {
     if (!url) return false;
@@ -125,6 +129,7 @@ const HomeV1 = ({navigation, route}) => {
       setIsLoading(true);
       try {
         const {data} = await getHttps(`feed?page=${newPage}&limit=5`);
+        console.log(data)
         if (Array.isArray(data)) {
           if (newPage === 1) setFeeds(data);
           else setFeeds(prev => [...prev, ...data]);
@@ -146,6 +151,25 @@ const HomeV1 = ({navigation, route}) => {
     },
     [navigation],
   );
+  const handleFollow = async (id) => {
+    try {
+      const response = await getHttps(`followers/toggle/${id}`);
+      console.log(response.data)
+      const isNowFollowing = response.data.siguiendo;
+               
+      setIsFollowing(response.data.siguiendo);
+      setFollowers(prev => (response.data.siguiendo ? prev + 1 : prev - 1));
+       if (isNowFollowing) {
+        setFollowedIds(prev => [...prev, id]);
+      sendToggleNotification?.({
+        followerId: DataUser.id,
+        followedId:id
+      });
+    }
+    } catch (error) {
+      console.error('Error following/unfollowing user:', error);
+    }
+  };
 
   const fetchStories = useCallback(async () => {
     if (!DataUser.id) return;
@@ -230,12 +254,14 @@ const HomeV1 = ({navigation, route}) => {
     setFeeds(updatedFeeds);
     setLikeLoading(prev => ({...prev, [idFeed]: true}));
     try {
-      await postHttps('like', {id_feed: idFeed, type: 'FEED'});
-      sendReactionNotification?.({
-        feedId: idFeed,
-        reactorId: DataUser.id,
-        reactionType: '❤️',
-      });
+     const response= await postHttps('like', {id_feed: idFeed, type: 'FEED'});
+    if (response?.data?.data.status === "1") {
+  sendReactionNotification?.({
+    feedId: idFeed,
+    reactorId: DataUser.id,
+    reactionType: '❤️',
+  });
+}
     } catch (error) {
       // Revertir en caso de error
       setFeeds(feeds);
@@ -482,171 +508,203 @@ const HomeV1 = ({navigation, route}) => {
   };
 
   // Renderizar cada feed
-  const renderFeedItem = (feed, index) => {
-    let images = [];
-    if (feed.feed_img) {
-      try {
-        images = Array.isArray(feed.feed_img)
-          ? feed.feed_img
-          : JSON.parse(feed.feed_img);
-      } catch (error) {
-        images = [];
-      }
+  
+
+const renderFeedItem = (feed, index) => {
+  let images = [];
+  if (feed.feed_img) {
+    try {
+      images = Array.isArray(feed.feed_img)
+        ? feed.feed_img
+        : JSON.parse(feed.feed_img);
+    } catch (error) {
+      images = [];
     }
-    return (
-      <View key={index} style={postStyles.feedContainer}>
-        {/* Perfil */}
-        <View style={postStyles.profileContainer}>
-          <TouchableOpacity
-            onPress={() => {
-              if (DataUser.id == feed.userId) navigation.navigate('Profile');
-              else navigation.navigate('FriendTimeline', {id: feed.userId});
+  }
+
+  return (
+    <View key={index} style={postStyles.feedContainer}>
+      {/* Perfil */}
+      <View style={postStyles.profileContainer}>
+        <TouchableOpacity
+          onPress={() => {
+            if (DataUser.id == feed.userId) navigation.navigate('Profile');
+            else navigation.navigate('FriendTimeline', { id: feed.userId });
+          }}
+          style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <FastImage
+            source={{
+              uri:
+                feed.users_img ||
+                'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
             }}
-            style={{flexDirection: 'row'}}>
-            <FastImage
-              source={{
-                uri:
-                  feed.users_img ||
-                  'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
-              }}
-              style={postStyles.imgProfile}
-            />
-            <View style={{left: 10, top: 7}}>
+            style={postStyles.imgProfile}
+          />
+          <View style={styles.profileHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={postStyles.profileName}>
                 {feed.users_first_name
                   ? `${feed.users_first_name} ${feed.users_last_name}`
                   : 'Anónimo'}
               </Text>
+
+              {/* ✅ Icono de verificado */}
+              {feed.users_checked === "1" || feed.users_checked === 1 ? (
+                <MaterialIcons
+                  name="verified"
+                  size={18}
+                  color="#3897f0"
+                  style={{ marginLeft: 6 }}
+                />
+              ) : null}
             </View>
-          </TouchableOpacity>
-          {renderFeedOptions(feed)}
-          {feedToDelete === feed.feed_id && showDeleteConfirm && (
-            <View style={styles.overlay}>
-              <View style={styles.confirmBox}>
-                <Text style={styles.confirmTitle}>
-                  ¿Eliminar esta publicación?
-                </Text>
-                <Text style={styles.confirmMessage}>
-                  Esta acción no se puede deshacer.
-                </Text>
-                <View style={styles.confirmActions}>
-                  <TouchableOpacity
-                    onPress={() => setShowDeleteConfirm(false)}
-                    style={styles.cancelButton}>
-                    <Text style={styles.cancelText}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleDelete}
-                    style={styles.deleteButton}>
-                    <Text style={styles.deleteText}>Eliminar</Text>
-                  </TouchableOpacity>
-                </View>
+
+            {/* ✅ Botón Seguir */}
+    {feed.userId !== DataUser.id &&
+  feed.isFollowing === 0 &&
+  !followedIds.includes(feed.userId) && ( // 👈 ya hiciste follow, no mostrar
+    <TouchableOpacity
+      onPress={() => handleFollow(feed.userId)}
+      style={styles.followButton}>
+      <Text style={styles.followButtonText}>Seguir</Text>
+    </TouchableOpacity>
+)}
+          </View>
+        </TouchableOpacity>
+
+        {renderFeedOptions(feed)}
+
+        {feedToDelete === feed.feed_id && showDeleteConfirm && (
+          <View style={styles.overlay}>
+            <View style={styles.confirmBox}>
+              <Text style={styles.confirmTitle}>
+                ¿Eliminar esta publicación?
+              </Text>
+              <Text style={styles.confirmMessage}>
+                Esta acción no se puede deshacer.
+              </Text>
+              <View style={styles.confirmActions}>
+                <TouchableOpacity
+                  onPress={() => setShowDeleteConfirm(false)}
+                  style={styles.cancelButton}>
+                  <Text style={styles.cancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleDelete}
+                  style={styles.deleteButton}>
+                  <Text style={styles.deleteText}>Eliminar</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          )}
-        </View>
-        <View style={{flexDirection: 'row'}}>
-          <View style={postStyles.contentRow}></View>
-          <View style={postStyles.imageContainer}>
-            {images.length > 0 &&
-              images[0] &&
-              renderMedia(images, feed.feed_id)}
           </View>
+        )}
+      </View>
+
+      {/* Imagen o video */}
+      <View style={{ flexDirection: 'row' }}>
+        <View style={postStyles.contentRow}></View>
+        <View style={postStyles.imageContainer}>
+          {images.length > 0 && images[0] && renderMedia(images, feed.feed_id)}
         </View>
-        <View style={postStyles.interactionContainer}>
-          <TouchableOpacity
-            onPress={() => handleClick(feed.feed_id)}
-            disabled={likeLoading[feed.feed_id]}
-            style={postStyles.likeContainer}>
-            <MaterialCommunityIcons
-              name="cards-heart-outline"
-              size={30}
-              color={feed.userLiked ? 'red' : 'white'}
-            />
-            <TouchableOpacity
-              onPress={() => {
-                setUserFeedId(feed.userId);
-                setCurrentFeedId(feed.feed_id);
-                setModalVisible2(true);
-              }}>
-              <Text style={postStyles.likeText}>{feed.likeCount} </Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
+      </View>
+
+      {/* Interacciones */}
+      <View style={postStyles.interactionContainer}>
+        <TouchableOpacity
+          onPress={() => handleClick(feed.feed_id)}
+          disabled={likeLoading[feed.feed_id]}
+          style={postStyles.likeContainer}>
+          <MaterialCommunityIcons
+            name="cards-heart-outline"
+            size={30}
+            color={feed.userLiked ? 'red' : 'white'}
+          />
           <TouchableOpacity
             onPress={() => {
               setUserFeedId(feed.userId);
               setCurrentFeedId(feed.feed_id);
-              setModalVisible(true);
-            }}
-            style={postStyles.commentContainer}>
-            <MaterialCommunityIcons name="comment" size={30} color="white" />
-            <Text style={postStyles.commentText}>{feed.commentCount}</Text>
-          </TouchableOpacity>
-        </View>
-        <View
-          style={[
-            postStyles.descriptionContainer,
-            feed.feed_description &&
-              feed.feed_description.length > 50 && {marginTop: 35},
-          ]}>
-          <TouchableOpacity
-            onPress={() => {
-              if (DataUser.id === feed.userId) {
-                navigation.navigate('Profile');
-              } else {
-                navigation.navigate('FriendTimeline', {id: feed.userId});
-              }
+              setModalVisible2(true);
             }}>
+            <Text style={postStyles.likeText}>{feed.likeCount} </Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            setUserFeedId(feed.userId);
+            setCurrentFeedId(feed.feed_id);
+            setModalVisible(true);
+          }}
+          style={postStyles.commentContainer}>
+          <MaterialCommunityIcons name="comment" size={30} color="white" />
+          <Text style={postStyles.commentText}>{feed.commentCount}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Descripción */}
+      <View
+        style={[
+          postStyles.descriptionContainer,
+          feed.feed_description?.length > 50 && { marginTop: 35 },
+        ]}>
+        <TouchableOpacity
+          onPress={() => {
+            if (DataUser.id === feed.userId) {
+              navigation.navigate('Profile');
+            } else {
+              navigation.navigate('FriendTimeline', { id: feed.userId });
+            }
+          }}>
+          <Text
+            style={[postStyles.profileName, { flexWrap: 'wrap' }]}
+            numberOfLines={1}
+            ellipsizeMode="tail">
+            {feed.users_first_name
+              ? `${feed.users_first_name} ${feed.users_last_name}`
+              : 'Anónimo'}
+          </Text>
+        </TouchableOpacity>
+
+        <Text
+          style={[postStyles.eventAddress, { flexWrap: 'wrap' }]}
+          numberOfLines={showFullDescription ? undefined : 2}
+          ellipsizeMode={showFullDescription ? undefined : 'tail'}>
+          {feed.feed_description}
+        </Text>
+
+        {feed.feed_description?.length > 50 && (
+          <TouchableOpacity
+            onPress={() => setShowFullDescription(!showFullDescription)}>
             <Text
-              style={[postStyles.profileName, {flexWrap: 'wrap'}]}
-              numberOfLines={1}
-              ellipsizeMode="tail">
-              {feed.users_first_name
-                ? `${feed.users_first_name} ${feed.users_last_name}`
-                : 'Anónimo'}
+              style={{
+                color: 'white',
+                fontSize: 12,
+                marginTop: 2,
+                fontFamily: 'Poppins-Bold',
+              }}>
+              {showFullDescription ? 'Ver menos' : 'Ver más'}
             </Text>
           </TouchableOpacity>
+        )}
 
-          <Text
-            style={[postStyles.eventAddress, {flexWrap: 'wrap'}]}
-            numberOfLines={showFullDescription ? undefined : 2}
-            ellipsizeMode={showFullDescription ? undefined : 'tail'}>
-            {feed.feed_description}
-          </Text>
-
-          {feed.feed_description && feed.feed_description.length > 50 && (
-            <TouchableOpacity
-              onPress={() => setShowFullDescription(!showFullDescription)}>
-              <Text
-                style={{
-                  color: 'white',
-                  fontSize: 12,
-                  marginTop: 2,
-                  fontFamily: 'Poppins-Bold',
-                }}>
-                {showFullDescription ? 'Ver menos' : 'Ver más'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <Text style={{color: '#aaa', fontSize: 12, marginTop: 2}}>
-            {feed.feed_date_publication
-              ? timeAgo(feed.feed_date_publication)
-              : ''}
-          </Text>
-        </View>
-        <View
-          style={{
-            height: 1,
-            backgroundColor: '#ccc',
-            marginTop: 10,
-            width: '100%',
-            top: 10,
-          }}
-        />
+        <Text style={{ color: '#aaa', fontSize: 12, marginTop: 2 }}>
+          {feed.feed_date_publication ? timeAgo(feed.feed_date_publication) : ''}
+        </Text>
       </View>
-    );
-  };
+
+      <View
+        style={{
+          height: 1,
+          backgroundColor: '#ccc',
+          marginTop: 10,
+          width: '100%',
+          top: 10,
+        }}
+      />
+    </View>
+  );
+};
+
 
   // FlatList: para saber cuál feed está visible (para pausar videos)
   const onViewableItemsChanged = useRef(({viewableItems}) => {
@@ -762,6 +820,23 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 50, // Ensures the last item is not cut off
   },
+followButton: {
+   paddingHorizontal: 12,
+  paddingVertical: 5,
+  backgroundColor: '#3897f0',
+  borderRadius: 6,
+  height: 30,
+  justifyContent: 'center',
+  alignItems: 'center',
+  left:70
+  
+},
+
+followButtonText: {
+  color: '#fff',
+  fontSize: 13,
+  fontFamily: 'Poppins-Bold',
+},
 
   emptyContainer: {
     padding: 20,
@@ -828,12 +903,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   plusText: {color: 'white', fontSize: 16, fontWeight: 'bold'},
-  feedOptionsButton: {
-    padding: 8,
-    zIndex: 2,
-    left: (120 / 360) * width,
-  },
-
+feedOptionsButton: {
+  position: 'absolute',
+  right: 10,   // 👈 alinea perfectamente a la derecha en todos los dispositivos
+  padding: 8,
+  zIndex: 2,
+  top: -20,
+},
   badge: {
     position: 'absolute',
     top: -4,
@@ -852,32 +928,31 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  optionsContainer: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
-    backgroundColor: 'white',
-    padding: 10,
-    borderRadius: 8,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    zIndex: 12,
-    width: 150,
-  },
-  optionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  optionText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: 'black',
-  },
-
+ optionsContainer: {
+  position: 'absolute',
+  top: 45, // justo debajo del botón ⋮
+  right: 10,
+  backgroundColor: 'white',
+  borderRadius: 8,
+  paddingVertical: 6,
+  paddingHorizontal: 10,
+  elevation: 5,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.2,
+  shadowRadius: 4,
+  zIndex: 3,
+},
+ optionButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 6,
+},
+ optionText: {
+  marginLeft: 8,
+  fontSize: 14,
+  color: '#000',
+},
   overlay: {
     position: 'absolute',
     top: 0,
@@ -887,6 +962,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 100,
   },
+  profileHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingHorizontal: 12,
+  marginBottom: 8,
+},
   confirmBox: {
     width: '90%',
     padding: 20,
@@ -974,13 +1056,14 @@ const postStyles = StyleSheet.create({
     marginBottom: 40,
     marginHorizontal: 12,
   },
-  profileContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 8,
-    gap: 10,
-  },
+profileContainer: {
+  position: 'relative', // 👈 NECESARIO para que el botón se posicione correctamente dentro de este contenedor
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingHorizontal: 12,
+  marginBottom: 12,
+},
   imgProfile: {
     width: 40,
     height: 40,

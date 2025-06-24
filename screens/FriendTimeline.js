@@ -8,7 +8,7 @@ import {
   FlatList,
   Modal,
 } from 'react-native';
-import React, {useEffect, useState} from 'react';
+import React, {useContext, useEffect, useState} from 'react';
 import {COLORS, SIZES, FONTS, images} from '../constants';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import Feather from 'react-native-vector-icons/Feather';
@@ -23,9 +23,11 @@ import Tab from '../components/Tab';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from "react-native-vector-icons/MaterialIcons"; // Icono de "X" para limpiar
+import { SocketContext } from '../context/SocketContext';
 
 const FriendTimeline = ({navigation, route}) => {
   const {id} = route.params;
+
 
   const [user, setUser] = useState({});
   const [feed, setfeed] = useState({});
@@ -38,6 +40,7 @@ const FriendTimeline = ({navigation, route}) => {
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [isTruncated, setIsTruncated] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+    const {sendToggleNotification} = useContext(SocketContext);
 
   const loadUserData = async () => {
     try {
@@ -123,9 +126,16 @@ const FriendTimeline = ({navigation, route}) => {
   const handleFollow = async () => {
     try {
       const response = await getHttps(`followers/toggle/${id}`);
-
+      const isNowFollowing = response.data.siguiendo;
+         
       setIsFollowing(response.data.siguiendo);
       setFollowers(prev => (response.data.siguiendo ? prev + 1 : prev - 1));
+       if (isNowFollowing) {
+      sendToggleNotification?.({
+        followerId: DataUser.id,
+        followedId:id
+      });
+    }
     } catch (error) {
       console.error('Error following/unfollowing user:', error);
     }
