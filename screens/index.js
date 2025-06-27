@@ -65,6 +65,12 @@ import Following from './Following';
 import PrivacySettings from './PrivacySettings';
 import PublicPatchScreen from './PublicPatchScreen';
 import PrivatePatchScreen from './PrivatePatchScreen';
+import Parches from './Parches';
+import DetailsParches from './DetailsParches';
+import ChatParche from './ChatParche';
+
+
+
 
 
 export {
@@ -130,5 +136,8 @@ export {
   Following,
   PrivacySettings,
   PrivatePatchScreen,
-  PublicPatchScreen
+  PublicPatchScreen,
+  Parches,
+  DetailsParches,
+  ChatParche
 };

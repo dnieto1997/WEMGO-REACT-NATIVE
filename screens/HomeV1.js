@@ -129,7 +129,6 @@ const HomeV1 = ({navigation, route}) => {
       setIsLoading(true);
       try {
         const {data} = await getHttps(`feed?page=${newPage}&limit=5`);
-        console.log(data)
         if (Array.isArray(data)) {
           if (newPage === 1) setFeeds(data);
           else setFeeds(prev => [...prev, ...data]);
@@ -158,7 +157,7 @@ const HomeV1 = ({navigation, route}) => {
       const isNowFollowing = response.data.siguiendo;
                
       setIsFollowing(response.data.siguiendo);
-      setFollowers(prev => (response.data.siguiendo ? prev + 1 : prev - 1));
+      setFollowers(prev => (response.data.siguiendo ? prev + 1 : prev - 1))
        if (isNowFollowing) {
         setFollowedIds(prev => [...prev, id]);
       sendToggleNotification?.({

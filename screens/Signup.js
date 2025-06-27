@@ -28,6 +28,7 @@ const initialState = {
   inputValues: {
     first_name: '',
     last_name: '',
+    gender:'',
     email: '',
     phone: '',
     birthdate: '',
@@ -38,6 +39,7 @@ const initialState = {
   inputValidities: {
     first_name: false,
     last_name: false,
+     gender:'',
     email: false,
     phone: false,
     birthdate: false,
@@ -48,6 +50,7 @@ const initialState = {
   formIsValid: false,
 };
 const countries = ['Barranquilla'];
+const gender = ['Masculino','Femenino','Otros','Prefiero no Decirlo'];
 
 const Signup = ({navigation}) => {
   const [isChecked, setChecked] = useState(false);
@@ -115,6 +118,7 @@ const Signup = ({navigation}) => {
     });
     formData.append('first_name', formState.inputValues.first_name);
     formData.append('last_name', formState.inputValues.last_name);
+       formData.append('gender', formState.inputValues.gender);
     formData.append('email', formState.inputValues.email);
     formData.append('phone', formState.inputValues.phone);
     formData.append('birthdate', formState.inputValues.birthdate);
@@ -230,6 +234,33 @@ const Signup = ({navigation}) => {
                     : ['Apellidos Requeridos.']
                 }
               />
+
+               <View style={styles.selectContainer}>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={formState.inputValues.gender}
+                    onValueChange={value =>
+                      inputChangedHandler('gender', value)
+                    }
+                    style={styles.picker}
+                    dropdownIconColor={COLORS.black} // Dropdown arrow color
+                  >
+                    <Picker.Item
+                      label="Seleccione Genero"
+                      value=""
+                      color="#999"
+                      disabled={true}
+                    />
+                    {gender.map(gender => (
+                      <Picker.Item
+                        key={gender}
+                        label={gender}
+                        value={gender}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
               <Input
                 id="email"
                 placeholder="Correo Electronico"

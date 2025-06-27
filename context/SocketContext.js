@@ -14,12 +14,14 @@ const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     const connectSocket = async () => {
-      const BASE_URL = 'http://192.168.1.17:3002';
+      //const BASE_URL = 'http://192.168.1.17:3002';
+         const BASE_URL = 'https://wemgo.online';
 
       try {
         const token = await AsyncStorage.getItem('authToken');
         const storedFcmToken = await AsyncStorage.getItem('fcmToken');
-        await postHttps('notification/save-token', { token: storedFcmToken });
+      
+        
 
         if (!token || socketRef.current) return;
 
@@ -65,12 +67,17 @@ const SocketProvider = ({ children }) => {
         newSocket.off('newReaction');
         newSocket.off('newReactionStory');
         newSocket.off('newFollow');
+         newSocket.off('sendInvitation');
 
         newSocket.on('newComment', async commentData => {
           // lógica opcional
         });
 
         newSocket.on('newFollow', async followData => {
+          // lógica opcional
+        });
+
+          newSocket.on('sendInvitation', async invitationData => {
           // lógica opcional
         });
 
@@ -101,7 +108,7 @@ const SocketProvider = ({ children }) => {
     };
   }, []);
 
-  // 🔁 Funciones disponibles desde el contexto
+ 
 
   const sendMessage = messageData => {
     if (socketRef.current) {
@@ -133,8 +140,18 @@ const SocketProvider = ({ children }) => {
   };
 
   const sendCommentNotification = commentData => {
+    console.log(commentData)
     if (socketRef.current) {
       socketRef.current.emit('newComment', commentData);
+    } else {
+      console.warn('Socket is not connected.');
+    }
+  };
+
+    const sendInvitationNotification = invitationData => {
+    console.log(invitationData)
+    if (socketRef.current) {
+      socketRef.current.emit('sendInvitation', invitationData);
     } else {
       console.warn('Socket is not connected.');
     }
@@ -203,6 +220,7 @@ const SocketProvider = ({ children }) => {
         listenForReactions,
         sendNewFeed,
         sendToggleNotification,
+        sendInvitationNotification,
         refreshChats,
         onlineUsers,
       }}

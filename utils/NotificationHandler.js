@@ -1,11 +1,10 @@
 import messaging from '@react-native-firebase/messaging';
-import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
-import { navigate } from './NavigationService';
+import notifee, {AndroidImportance, EventType} from '@notifee/react-native';
+import {navigate, push} from './NavigationService';
 
 // 🔗 Maneja el clic en la notificación
 const onNotificationClick = async data => {
   if (!data) return;
-  console.log('🔗 Clic en notificación:', data);
 
   let extraData = {};
   try {
@@ -13,31 +12,44 @@ const onNotificationClick = async data => {
   } catch (e) {
     extraData = {};
   }
+  console.log(extraData);
+  const {type, ...params} = data;
 
-  const { type, ...params } = data;
-             console.log("data",extraData)
   switch (type) {
     case 'message':
-      navigate('MessageDetails', { id: extraData.senderId });
+      navigate('MessageDetails', {id: extraData.senderId});
       break;
     case 'event':
-      navigate('EventDetails', { ...params, ...extraData });
-      break;
-    case 'comment':
-      navigate('Comments', { ...params, ...extraData });
-      break;
-    case 'feed_notification':
-      navigate('Post', { id: extraData.id });
-      break
-       case 'reaction_feed':
-      navigate('Post', { id: extraData.feedId });
+      navigate('EventDetails', {...params, ...extraData});
       break;
 
-       case 'follow_user':
-      navigate('FriendTimeline', { id: extraData.follower.id });
+    case 'feed_notification':
+      navigate('Post', {id: extraData.id});
+      break;
+    case 'reaction_feed':
+      push('Post', {id: extraData.feedId});
+      break;
+    case 'follow_user':
+      navigate('FriendTimeline', {id: extraData.follower.id});
+      break;
+    case 'comment':
+      navigate('Post', {
+        id: extraData.feedId,
+        commentId: extraData.commentId,
+      });
+      break;
+
+    case 'invitation_parche':
+      navigate('DetailsParches', {id: extraData.parchId});
+      break;
+      case 'invitation_parche':
+      navigate('DetailsParches', {id: extraData.parchId});
+      break;
+        case 'PARCHE_MESSAGE':
+      navigate('ChatParche', {id: extraData.id});
       break;
     default:
-      navigate('Home', { ...params, ...extraData });
+      navigate('Home', {...params, ...extraData});
       break;
   }
 };
@@ -46,8 +58,8 @@ const onNotificationClick = async data => {
 const showLocalNotification = async remoteMessage => {
   await notifee.requestPermission();
 
-  const { title, body } = remoteMessage.notification || {};
-  const { data } = remoteMessage;
+  const {title, body} = remoteMessage.notification || {};
+  const {data} = remoteMessage;
 
   if (!title && !body) {
     console.warn('🚫 Notificación sin contenido, no se muestra');
@@ -117,7 +129,7 @@ export const setupNotificationHandlers = () => {
   });
 
   // Usuario toca notificación mientras app está en primer plano
-  notifee.onForegroundEvent(({ type, detail }) => {
+  notifee.onForegroundEvent(({type, detail}) => {
     if (type === EventType.PRESS) {
       console.log('🖱️ Foreground: usuario tocó notificación');
       onNotificationClick(detail.notification?.data);
@@ -126,7 +138,7 @@ export const setupNotificationHandlers = () => {
 };
 
 // 🧠 Usuario toca notificación con la app cerrada (background event)
-notifee.onBackgroundEvent(async ({ type, detail }) => {
+notifee.onBackgroundEvent(async ({type, detail}) => {
   if (type === EventType.PRESS) {
     console.log('🖱️ Background: usuario tocó notificación');
     await onNotificationClick(detail.notification?.data);

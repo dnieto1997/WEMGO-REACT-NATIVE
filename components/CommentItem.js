@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useContext} from 'react';
+import React, {useState, useEffect, useContext,useRef} from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   TouchableWithoutFeedback,
   Image,
+  Keyboard,
 } from 'react-native';
 import {COLORS} from '../constants';
 import {deleteHttps, getHttps, patchHttps, postHttps} from '../api/axios';
@@ -16,7 +17,7 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import {SocketContext} from '../context/SocketContext';
-import MaterialIcons from "react-native-vector-icons/MaterialIcons"
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const CommentItem = ({
   feedId,
@@ -25,6 +26,7 @@ const CommentItem = ({
   onCommentAdded,
   onCommentDeleted,
   feedOwnerId,
+  focusCommentId
 }) => {
   const navigation = useNavigation();
   const [comments, setComments] = useState([]);
@@ -40,17 +42,41 @@ const CommentItem = ({
   const [editCommentText, setEditCommentText] = useState('');
   const [likecomment, setLikecomment] = useState(false);
   const [likereply, setLikereply] = useState(false);
-  
-  const {sendCommentNotification,listenForCommentNotifications} =
+
+const [showSuggestions, setShowSuggestions] = useState(false);
+const [suggestions, setSuggestions] = useState([]);
+const [mentionQuery, setMentionQuery] = useState('');
+const [mentionStart, setMentionStart] = useState(-1);
+const [mentionObj, setMentionObj] = useState(null);
+ const [keyboardHeight, setKeyboardHeight] = useState(0);
+ const flatListRef = React.useRef(null);
+
+
+
+  const {sendCommentNotification, listenForCommentNotifications} =
     useContext(SocketContext); // Integrar sockets
 
   useFocusEffect(
     React.useCallback(() => {
       return () => {
-        onClose(); // Cierra el modal cuando se navega a otra pantalla
+        onClose();
       };
     }, []),
   );
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', e => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
 
   const loadUserData = async () => {
     try {
@@ -77,7 +103,6 @@ const CommentItem = ({
       }
     };
 
-
     listenForCommentNotifications(() => {});
     listenForCommentNotifications(handleNewComment);
 
@@ -85,6 +110,18 @@ const CommentItem = ({
       listenForCommentNotifications(() => {}); // Desuscribirse al desmontar
     };
   }, [isVisible]);
+
+
+useEffect(() => {
+  if (isVisible && focusCommentId && comments.length > 0) {
+    const index = comments.findIndex(c => c.commentId === focusCommentId);
+    if (index !== -1 && flatListRef.current) {
+      setTimeout(() => {
+        flatListRef.current.scrollToIndex({ index, animated: true });
+      }, 300);
+    }
+  }
+}, [isVisible, focusCommentId, comments]);
 
   const editReply = reply => {
     setEditingReply(reply.replyId);
@@ -110,48 +147,77 @@ const CommentItem = ({
     try {
       await deleteHttps(`w-reply/${replyId}`);
       fetchComments();
-
     } catch (error) {
-      
       console.error('Error deleting reply:', error);
     }
   };
 
+  const fetchMentionUsers = async (query) => {
+  try {
+    if (!query) return [];
+    const res = await getHttps(`users/search/${query}`);
+    return res.data.map(u => ({
+      id: u.id,
+      name: `${u.first_name} ${u.last_name}`,
+    }));
+  } catch {
+    return [];
+  }
+};
+
   const fetchComments = async () => {
     try {
       const response = await getHttps(`comments/find/${feedId}`);
+  
       setComments(response.data);
     } catch (error) {
       console.error('Error fetching comments:', error);
     }
   };
 
-  const addComment = async () => {
-    if (!newComment.trim()) return;
-    try {
-      const response = await postHttps('comments', {
-        id_feed: feedId,
-        comments: newComment,
-      });
-      const newCommentData = {
-        commentId: response.data.commentId,
-        commentText: newComment,
-        userId: DataUser.id,
-        userFirstName: DataUser.firstName,
-        userLastName: DataUser.lastName,
-        users_img: DataUser.users_img,
-        feedId: feedId,
-      };
+const addComment = async () => {
+  if (!newComment.trim()) return;
 
-      sendCommentNotification(newCommentData);
+  let id_user_mention = null;
+  let user_mention = null;
+  if (mentionObj && newComment.includes(mentionObj.name)) {
+    id_user_mention = mentionObj.id;
+    user_mention = mentionObj.name;
+  }
 
-      setComments(prevComments => [...prevComments, newCommentData]);
-      setNewComment('');
-      onCommentAdded();
-    } catch (error) {
-      console.error('Error adding comment:', error);
-    }
-  };
+  try {
+    const response = await postHttps('comments', {
+      id_feed: feedId,
+      comments: newComment,
+      id_user_mention,
+      user_mention,
+    });
+         console.log(response.data)
+    const newCommentData = {
+      commentId: response.data.id,
+      commentText: newComment,
+      userId: DataUser.id,
+      userFirstName: DataUser.firstName,
+      userLastName: DataUser.lastName,
+      feedId: feedId,
+      idUserMention: id_user_mention,
+      userMention: user_mention,
+    };
+     
+    
+    sendCommentNotification(newCommentData);
+
+    setComments(prevComments => [...prevComments, newCommentData]);
+    setNewComment('');
+    setMentionObj(null);
+    setShowSuggestions(false);
+    onCommentAdded();
+  } catch (error) {
+    console.error('Error adding comment:', error);
+  }
+};
+
+
 
   const editComment = comment => {
     setEditingComment(comment.commentId);
@@ -169,7 +235,6 @@ const CommentItem = ({
   };
 
   const deleteComment = async commentId => {
-   
     try {
       await deleteHttps(`comments/${commentId}`);
       const updatedComments = comments.filter(
@@ -177,12 +242,11 @@ const CommentItem = ({
       );
       setComments(updatedComments);
 
-     
       onCommentDeleted();
     } catch (error) {
       console.log('Error deleting comment:', error);
     }
-       fetchComments()
+    fetchComments();
   };
   const addReply = async parentId => {
     if (!newReply.trim()) return;
@@ -204,6 +268,40 @@ const CommentItem = ({
     }
   };
 
+  const handleCommentChange = async (text) => {
+  setNewComment(text);
+  if (mentionObj && !text.includes(mentionObj.name)) setMentionObj(null);
+
+  const selection = text.lastIndexOf('@');
+  if (selection !== -1) {
+    const afterAt = text.slice(selection + 1);
+    if (/^[\w\s]{0,20}$/.test(afterAt)) {
+      setMentionQuery(afterAt);
+      setMentionStart(selection);
+      const users = await fetchMentionUsers(afterAt);
+      setSuggestions(users);
+      setShowSuggestions(true);
+      return;
+    }
+  }
+  setShowSuggestions(false);
+  setMentionQuery('');
+  setMentionStart(-1);
+};
+
+const handleSelectMention = (user) => {
+  if (mentionStart === -1) return;
+  const before = newComment.slice(0, mentionStart);
+  const after = newComment.slice(mentionStart + mentionQuery.length + 1);
+  const mentionText = `@${user.name}`;
+  const fullText = before + mentionText + after;
+  setNewComment(fullText);
+  setMentionObj({ id: user.id, name: mentionText });
+  setShowSuggestions(false);
+  setMentionQuery('');
+  setMentionStart(-1);
+};
+
   const navigateToProfile = userId => {
     onClose();
     if (DataUser.id == userId) {
@@ -214,45 +312,47 @@ const CommentItem = ({
   };
 
   const likeComment = async commentId => {
-      const updatedComments = [...comments];
+    const updatedComments = [...comments];
 
-  // Encuentra el comentario a actualizar
-  const commentToUpdate = updatedComments.find(c => c.commentId === commentId);
+    // Encuentra el comentario a actualizar
+    const commentToUpdate = updatedComments.find(
+      c => c.commentId === commentId,
+    );
 
-  if (commentToUpdate) {
-    // Optimistic UI: actualiza estado local de inmediato
-    commentToUpdate.liked = !commentToUpdate.liked;
-    commentToUpdate.likeCount += commentToUpdate.liked ? 1 : -1;
-    setComments(updatedComments);
-    setLikecomment(prev => !prev);
-  }
+    if (commentToUpdate) {
+      // Optimistic UI: actualiza estado local de inmediato
+      commentToUpdate.liked = !commentToUpdate.liked;
+      commentToUpdate.likeCount += commentToUpdate.liked ? 1 : -1;
+      setComments(updatedComments);
+      setLikecomment(prev => !prev);
+    }
     try {
       await postHttps('like/comment', {id_comment: commentId, type: 'COMMENT'});
       setLikecomment(!likecomment);
       fetchComments();
     } catch (error) {
-        if (commentToUpdate) {
-      commentToUpdate.liked = !commentToUpdate.liked;
-      commentToUpdate.likeCount += commentToUpdate.liked ? 1 : -1;
-      setComments([...updatedComments]);
-      setLikecomment(prev => !prev);
-    }
+      if (commentToUpdate) {
+        commentToUpdate.liked = !commentToUpdate.liked;
+        commentToUpdate.likeCount += commentToUpdate.liked ? 1 : -1;
+        setComments([...updatedComments]);
+        setLikecomment(prev => !prev);
+      }
     }
   };
 
   const likeReply = async replyId => {
-      setLikereply(prev => !prev);
+    setLikereply(prev => !prev);
 
-  // También puedes actualizar la estructura de comentarios directamente si lo deseas
-  const updatedComments = [...comments];
-  const replyToUpdate = updatedComments
-    .flatMap(c => c.replies || [])
-    .find(r => r.replyId === replyId);
-  if (replyToUpdate) {
-    replyToUpdate.liked = !replyToUpdate.liked;
-    replyToUpdate.likeCount += replyToUpdate.liked ? 1 : -1;
-    setComments(updatedComments);
-  }
+    // También puedes actualizar la estructura de comentarios directamente si lo deseas
+    const updatedComments = [...comments];
+    const replyToUpdate = updatedComments
+      .flatMap(c => c.replies || [])
+      .find(r => r.replyId === replyId);
+    if (replyToUpdate) {
+      replyToUpdate.liked = !replyToUpdate.liked;
+      replyToUpdate.likeCount += replyToUpdate.liked ? 1 : -1;
+      setComments(updatedComments);
+    }
 
     try {
       await postHttps('like/reply', {id_reply: replyId, type: 'REPLY'});
@@ -335,7 +435,7 @@ const CommentItem = ({
         <TouchableOpacity onPress={() => likeReply(item.replyId)}>
           <Icon name="heart" size={25} color={COLORS.white} />
         </TouchableOpacity>
-        <Text style={{color:"white"}}>{item.replyUser.replycount}</Text>
+        <Text style={{color: 'white'}}>{item.replyUser.replycount}</Text>
         {DataUser.id == item.replyUser.userId && (
           <>
             {editingReply === item.replyId ? (
@@ -358,92 +458,128 @@ const CommentItem = ({
       </View>
     </View>
   );
-  const renderComment = ({item}) => (
-    <View style={styles.commentContainer}>
-      <TouchableOpacity onPress={() => navigateToProfile(item.userId)}>
-        <View style={styles.commentHeader}>
-                
-          <Image
-            source={{
-              uri:
-                item.userImg ||
-                'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
-            }}
-            style={styles.commentImage}
-          />
-          <Text style={{color:"white"}}>
-            {item.userFirstName} {item.userLastName}
-          </Text>
-        </View>
-      </TouchableOpacity>
 
-      {editingComment === item.commentId ? (
-        <TextInput
-          style={styles.input}
-          value={editCommentText}
-          onChangeText={setEditCommentText}
+/*   const renderCommentText = (item) => (
+  <Text style={styles.commentText}>
+    <Text onPress={() => navigateToProfile(item.userId)} style={{ color: '#944af4' }}>
+      {item.userFirstName} {item.userLastName}
+    </Text>{' '}
+    {item.userMention && item.idUserMention ? (
+      <>
+        {item.commentText.split(item.userMention)[0]}
+        <Text
+          style={{ color: '#944af4' }}
+          onPress={() => navigateToProfile(item.idUserMention)}
+        >
+          {item.userMention}
+        </Text>
+        {item.commentText.split(item.userMention)[1]}
+      </>
+    ) : (
+      item.commentText
+    )}
+  </Text>
+); */
+ const renderComment = ({ item }) => (
+  <View style={styles.commentContainer}>
+    <TouchableOpacity onPress={() => navigateToProfile(item.userId)}>
+      <View style={styles.commentHeader}>
+        <Image
+          source={{
+            uri:
+              item.userImg ||
+              'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
+          }}
+          style={styles.commentImage}
         />
-      ) : (
-        <Text style={styles.commentText}>{item.commentText}</Text>
-      )}
-        
-          <View style={{margin:8}}/>
+        <Text style={{ color: 'white' }}>
+          {item.userFirstName} {item.userLastName}
+        </Text>
+      </View>
+    </TouchableOpacity>
 
-      <View style={styles.replyActions}>
-        <TouchableOpacity onPress={() => likeComment(item.commentId)}>
-          <Icon name="heart" size={25} color={COLORS.white} />
-        </TouchableOpacity>
-        <Text style={{color:"white",fontWeight:"bold"}}>{item.reactionCount}</Text>
-           
-        {(DataUser.id === item.userId || DataUser.id === feedOwnerId) && (
+    {editingComment === item.commentId ? (
+      <TextInput
+        style={styles.input}
+        value={editCommentText}
+        onChangeText={setEditCommentText}
+      />
+    ) : (
+      <Text style={styles.commentText}>
+        {item.userMention && item.idUserMention ? (
           <>
-            {DataUser.id === item.userId &&
-              (editingComment === item.commentId ? (
-                <TouchableOpacity
-                  onPress={() => saveEditedComment(item.commentId)}>
-                  <Icon name="check" size={25} color={COLORS.white} />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={() => editComment(item)}>
-                  <Icon name="edit" size={25} color={COLORS.white} />
-                </TouchableOpacity>
-              ))}
-
-            <TouchableOpacity onPress={() => deleteComment(item.commentId)}>
-              <Icon name="trash" size={25} color={COLORS.red} />
-            </TouchableOpacity>
+            {item.commentText.split(item.userMention)[0]}
+            <Text
+              style={{ color: '#944af4' }}
+              onPress={() => navigateToProfile(item.idUserMention)}
+            >
+              {item.userMention}
+            </Text>
+            {item.commentText.split(item.userMention)[1]}
           </>
+        ) : (
+          item.commentText
         )}
+      </Text>
+    )}
 
-        <TouchableOpacity onPress={() => setReplyingTo(item.commentId)}>
-          <Text style={styles.replyText}>Reply</Text>
+    <View style={{ margin: 8 }} />
+
+    <View style={styles.replyActions}>
+      <TouchableOpacity onPress={() => likeComment(item.commentId)}>
+        <Icon name="heart" size={25} color={COLORS.white} />
+      </TouchableOpacity>
+      <Text style={{ color: 'white', fontWeight: 'bold' }}>
+        {item.reactionCount}
+      </Text>
+
+      {(DataUser.id === item.userId || DataUser.id === feedOwnerId) && (
+        <>
+          {DataUser.id === item.userId &&
+            (editingComment === item.commentId ? (
+              <TouchableOpacity onPress={() => saveEditedComment(item.commentId)}>
+                <Icon name="check" size={25} color={COLORS.white} />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={() => editComment(item)}>
+                <Icon name="edit" size={25} color={COLORS.white} />
+              </TouchableOpacity>
+            ))}
+          <TouchableOpacity onPress={() => deleteComment(item.commentId)}>
+            <Icon name="trash" size={25} color={COLORS.red} />
+          </TouchableOpacity>
+        </>
+      )}
+
+      <TouchableOpacity onPress={() => setReplyingTo(item.commentId)}>
+        <Text style={styles.replyText}>Reply</Text>
+      </TouchableOpacity>
+    </View>
+
+    <View style={{ margin: 8 }} />
+
+    {replyingTo === item.commentId && (
+      <View style={styles.replyInputContainer}>
+        <TextInput
+          style={styles.replyInput}
+          placeholder="Escribe una Replica ..."
+          placeholderTextColor={'white'}
+          value={newReply}
+          onChangeText={setNewReply}
+        />
+        <TouchableOpacity
+          style={styles.replySendButton}
+          onPress={() => addReply(item.commentId)}
+        >
+          <MaterialIcons name="send" size={30} color="white" />
         </TouchableOpacity>
       </View>
-      <View style={{margin:8}}/>
-      {replyingTo === item.commentId && (
-        <View style={styles.replyInputContainer}>
-          <TextInput
-            style={styles.replyInput}
-            placeholder="Escribe una Replica ..."
-            placeholderTextColor={"white"}
-            value={newReply}
-            onChangeText={setNewReply}
-          />
-          <TouchableOpacity
-            style={styles.replySendButton}
-            onPress={() => addReply(item.commentId)}>
-              <MaterialIcons
-                                    name="send"
-                                    size={30}
-                                    color="white"
-                                />
-          </TouchableOpacity>
-        </View>
-      )}
+    )}
 
-      {renderReplies(item)}
-    </View>
-  );
+    {renderReplies(item)}
+  </View>
+);
+
   return (
     <Modal
       visible={isVisible}
@@ -456,29 +592,42 @@ const CommentItem = ({
       <View style={styles.modalContainer}>
         <Text style={styles.title}>Comentarios</Text>
         <FlatList
+         ref={flatListRef}
           data={comments}
           keyExtractor={(item, index) => `${index}`}
           renderItem={renderComment}
+            getItemLayout={(data, index) => (
+    { length: 120, offset: 120 * index, index }
+  )}
           contentContainerStyle={styles.commentList}
         />
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
             placeholder="Escribe un Comentario..."
-            placeholderTextColor={"white"}
+            placeholderTextColor={'white'}
             value={newComment}
-            onChangeText={setNewComment}
+            onChangeText={handleCommentChange}
           />
           <TouchableOpacity style={styles.replySendButton} onPress={addComment}>
-            
-             <MaterialIcons
-                                    name="send"
-                                    size={30}
-                                    color="white"
-                                />
+            <MaterialIcons name="send" size={30} color="white" />
           </TouchableOpacity>
         </View>
       </View>
+
+      {showSuggestions && suggestions.length > 0 && (
+  <View style={{ backgroundColor: 'white', maxHeight: 150 }}>
+    {suggestions.map(user => (
+      <TouchableOpacity
+        key={user.id}
+        onPress={() => handleSelectMention(user)}
+        style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#ccc' }}
+      >
+        <Text style={{ color: 'black' }}>{user.name}</Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+)}
       {selectedComment && (
         <Modal
           visible={replyModalVisible}
@@ -520,11 +669,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 16,
-    fontFamily:"Poppins-Bold",
-    color:"white"
+    fontFamily: 'Poppins-Bold',
+    color: 'white',
   },
 
-    commentImage: {
+  commentImage: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -544,9 +693,9 @@ const styles = StyleSheet.create({
     flex: 1, // Para que ocupe todo el espacio disponible
     fontSize: 14,
     paddingVertical: 5,
-    color:"white",
-    fontWeight:"bold",
-    fontFamily:"Poppins-Bold"
+    color: 'white',
+    fontWeight: 'bold',
+    fontFamily: 'Poppins-Bold',
   },
   replyInputContainer: {
     flexDirection: 'row', // Para alinear el input y el botón en una fila
@@ -576,10 +725,9 @@ const styles = StyleSheet.create({
   },
   commentText: {
     fontSize: 14,
-    color: "white",
-    fontFamily:"Poppins-Bold",
-    fontWeight:"bold"
-
+    color: 'white',
+    fontFamily: 'Poppins-Bold',
+    fontWeight: 'bold',
   },
   commentActions: {
     flexDirection: 'row',
@@ -587,10 +735,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   replyText: {
-    color: "white",
+    color: 'white',
     fontWeight: 'bold',
     marginLeft: 10,
-    fontFamily:"Poppins-Bold"
+    fontFamily: 'Poppins-Bold',
   },
   replyItem: {
     marginLeft: 20,
@@ -615,12 +763,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 8,
-    color:"white",
-    fontWeight:"bold",
-    fontFamily:"Poppins-Bold"
+    color: 'white',
+    fontWeight: 'bold',
+    fontFamily: 'Poppins-Bold',
   },
   addButton: {
-    backgroundColor: "gray",
+    backgroundColor: 'gray',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 8,
@@ -630,7 +778,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   viewMoreText: {
-    backgroundColor: "gray",
+    backgroundColor: 'gray',
     fontWeight: 'bold',
     marginTop: 6,
     textAlign: 'right',
@@ -680,7 +828,6 @@ const styles = StyleSheet.create({
   replyAuthor: {
     fontSize: 16,
     color: 'white',
-
   },
   commentImage: {
     width: 30,
@@ -694,13 +841,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   replySendButton: {
-    backgroundColor: "#944af4",
+    backgroundColor: '#944af4',
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 100,
-    marginLeft: 10, 
-    width:48,
-    height:48
+    marginLeft: 10,
+    width: 48,
+    height: 48,
   },
 
   ...StyleSheet.flatten(styles),

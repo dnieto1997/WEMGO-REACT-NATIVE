@@ -14,7 +14,7 @@ import CheckBox from '@react-native-community/checkbox';
 import {COLORS, SIZES, FONTS, icons, images} from '../constants';
 import Input from '../components/Input';
 
-import {loginHttps} from '../api/axios';
+import {loginHttps, postHttps} from '../api/axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging from '@react-native-firebase/messaging';
 
@@ -36,6 +36,7 @@ const Login = ({navigation}) => {
 
       if (response.data.status === 'ACTIVE') {
         const fcmToken = await messaging().getToken();
+      
         const userData = {
           authToken: response.data.token,
           id: response.data.id,
@@ -50,6 +51,7 @@ const Login = ({navigation}) => {
         await AsyncStorage.setItem('userData', JSON.stringify(userData));
         await AsyncStorage.setItem('authToken', response.data.token);
         await AsyncStorage.setItem('fcmToken', fcmToken);
+         await postHttps('notification/save-token', { token: fcmToken });
 
         if (response.data.interest == 1) {
           navigation.navigate('Main');

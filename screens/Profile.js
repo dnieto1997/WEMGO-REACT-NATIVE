@@ -128,7 +128,7 @@ const Profile = ({navigation}) => {
             <Text style={styles.btnText}>WemChat</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => navigation.navigate('Followers', {id: DataUser.id})}
+            onPress={() => navigation.navigate('Parches')}
             style={[
               styles.btn,
               {

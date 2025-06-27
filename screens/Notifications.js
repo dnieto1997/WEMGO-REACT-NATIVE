@@ -1,190 +1,228 @@
-import React, {useState, useEffect} from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
-  Alert,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+  RefreshControl,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import {getHttps} from '../api/axios';
+import { useNavigation } from '@react-navigation/native';
+import { getHttps } from '../api/axios';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Header from '../components/Header';
 import Tab from '../components/Tab';
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
+
+  const fetchNotifications = async (reset = false) => {
+    if (loading) return;
+    if (!reset && page > totalPages) return;
+
+    if (reset) {
+      setRefreshing(true);
+      setPage(1);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      const response = await getHttps(`notification?page=${reset ? 1 : page}&limit=10`);
+      const result = response.data;
+      const parsed = result.notifications.map(n => ({
+        ...n,
+        data: JSON.parse(n.data),
+      }));
+
+      if (reset) {
+        setNotifications(parsed);
+        setTotalPages(result.totalPages);
+        setPage(2);
+      } else {
+        setNotifications(prev => [...prev, ...parsed]);
+        setTotalPages(result.totalPages);
+        setPage(prev => prev + 1);
+      }
+    } catch (err) {
+      console.error('Error cargando notificaciones:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     fetchNotifications();
   }, []);
 
-  const fetchNotifications = async () => {
-    try {
-      const response = await getHttps('notification');
+  const renderItem = ({ item }) => {
+    const { type, message, data, created_at, user } = item;
 
-      // Convertir la cadena de `img` a array
-      const formattedNotifications = response.data.map(item => ({
-        ...item,
-        img: JSON.parse(item.img)[0] || null, // Tomar solo la primera imagen del array
-      }));
-
-      setNotifications(formattedNotifications);
-    } catch (error) {
-      if (error.status === 401) {
-        navigation.navigate('Login');
-      } else {
-        Alert.alert('Error', 'No se pudieron cargar las notificaciones.');
+    const goToDestination = () => {
+      switch (type) {
+        case 'follow_user':
+          return navigation.navigate('FriendTimeline', { id: data.follower.id });
+        case 'reaction_feed':
+        case 'feed_notification':
+        case 'mention_feed':
+          return navigation.navigate('Post', { id: data.feedId || data.id });
+        case 'comment_feed':
+          return navigation.navigate('Post', {
+            id: data.feedId || data.id,
+            commentId: data.commentId,
+          });
+          case 'invitation_parche':
+      return navigation.navigate('DetailsParches', { id: data.parchId });
+        default:
+          return;
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  const formatTimeAgo = date => {
-    const now = new Date();
-    const diffMs = now - new Date(date);
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHours = Math.floor(diffMin / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    const diffWeeks = Math.floor(diffDays / 7);
+    const getImage = () => {
+      if (type === 'comment_feed' || type === 'mention_feed') return user?.img;
+      if (type === 'follow_user') return data.follower?.avatar;
+      if (type === 'reaction_feed') return data.reactor?.avatar;
+      if (type === 'feed_notification') return data.user?.avatar || user?.img;
+       if (type === 'invitation_parche') return data.user?.img;
+      return null;
+    };
 
-    if (diffSec < 60) return 'hace un momento';
-    if (diffMin < 60) return `hace ${diffMin} min`;
-    if (diffHours < 24) return `hace ${diffHours} h`;
-    if (diffDays < 7) return `hace ${diffDays} d`;
-    return `hace ${diffWeeks} sem`;
-  };
+    const getMiniFeed = () => {
+      if (type === 'comment_feed' || type === 'mention_feed') {
+        if (data?.img) {
+          try {
+            const parsed = JSON.parse(data.img);
+            if (Array.isArray(parsed) && parsed[0]) return parsed[0];
+          } catch {
+            return data.img;
+          }
+        }
+      }
 
-  const handlePressNotification = id => {
-    navigation.navigate('Post', {id});
-  };
+      if (data?.thumbnail) {
+        try {
+          const parsed = JSON.parse(data.thumbnail);
+          if (Array.isArray(parsed) && parsed[0]) return parsed[0];
+        } catch {}
+      }
 
-  const renderItem = ({item}) => (
-    <>
-      <TouchableOpacity
-        style={styles.notificationCard}
-        onPress={() => handlePressNotification(item.id)}>
-        {/* Imagen del usuario */}
-        <Image
-          source={{uri: item.user.img || 'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png'}}
-          style={styles.avatar}
-        />
+      if (data?.images) {
+        try {
+          const parsed = JSON.parse(data.images);
+          if (Array.isArray(parsed) && parsed[0]) return parsed[0];
+        } catch {}
+      }
 
+      return null;
+    };
+
+    const isVerified = ['1', 1, true].includes(
+      data?.user?.verificado || data?.user?.checked ||
+      data?.follower?.verificado || data?.follower?.checked ||
+      data?.reactor?.verificado || data?.reactor?.checked ||
+      user?.checked
+    );
+
+    return (
+      <TouchableOpacity style={styles.card} onPress={goToDestination}>
+        {getImage() && <Image source={{ uri: getImage() }} style={styles.avatar} />}
         <View style={styles.textContainer}>
-          {/* Nombre del usuario y descripción del feed */}
-          <Text style={styles.userName}>
-            <Text style={styles.boldText}>
-              {item.user.first_name} {item.user.last_name}
-            </Text>{' '}
-            ha compartido la siguiente publicación
-          </Text>
-
-          {/* Fecha formateada */}
-          <Text style={styles.date}>
-            {formatTimeAgo(item.date_publication)}
-          </Text>
+          <View style={styles.row}>
+            <Text style={styles.message}>{message}</Text>
+            {isVerified && (
+              <MaterialIcons
+                name="verified"
+                size={18}
+                color="#3897f0"
+                style={{ marginLeft: 6 }}
+              />
+            )}
+          </View>
+          <Text style={styles.date}>{new Date(created_at).toLocaleString()}</Text>
         </View>
-
-        {/* Imagen del feed (primera imagen) */}
-        {item.img && (
-          <Image source={{uri: item.img}} style={styles.feedImage} />
-        )}
+        {getMiniFeed() && <Image source={{ uri: getMiniFeed() }} style={styles.feedImage} />}
       </TouchableOpacity>
-      <View style={styles.rayita} />
-    </>
-  );
+    );
+  };
 
   return (
-    <>
-      <View style={styles.container}>
-        <Header title="Notificaciones" />
-        {loading ? (
-          <ActivityIndicator size="large" color="#007BFF" />
-        ) : notifications.length === 0 ? (
-          <Text style={styles.noNotifications}>
-            No hay ninguna notificación.
-          </Text>
-        ) : (
-          <FlatList
-            data={notifications}
-            keyExtractor={(item, index) => index.toString()}
-            renderItem={renderItem}
-            ListFooterComponent={<View style={{height: 80}} />} 
-          />
-        )}
-      </View>
-
-      <Tab />
-    </>
-  );
+  <View style={styles.container}>
+   <View style={{top:7,left:10}}>
+  <Header title="Notificaciones" /> 
+</View>
+    <FlatList
+      contentContainerStyle={{ paddingTop: 10, paddingBottom: 80 }} // paddingBottom por si el Tab oculta el último ítem
+      data={notifications}
+      keyExtractor={item => item.id.toString()}
+      renderItem={renderItem}
+      onEndReached={() => fetchNotifications()}
+      onEndReachedThreshold={0.5}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => fetchNotifications(true)}
+          colors={['#9b59b6']}
+          tintColor="#9b59b6"
+        />
+      }
+      ListFooterComponent={loading && <ActivityIndicator color="#9b59b6" />}
+    />
+    <View style={{margin:10}}/>
+    <Tab />
+  </View>
+);
 };
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: 'black', padding: 10},
-
-  noNotifications: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 20,
-    color: 'White',
-    fontFamily:"Poppins-Bold"
-  },
-
-  // Estilo de cada notificación
-  notificationCard: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
     backgroundColor: 'black',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+  },
+  card: {
+    flexDirection: 'row',
+    padding: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#444',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-
-  // Avatar del usuario
-  avatar: {width: 50, height: 50, borderRadius: 25, marginRight: 10},
-
-  // Contenedor del texto
-  textContainer: {flex: 1},
-
-  // Nombre del usuario en negrita
-  userName: {fontSize: 14, color: 'white', fontWeight: 'bold'},
-  boldText: {color: 'white', fontWeight: 'bold', fontFamily: 'Poppins-Bold'},
-
-  // Fecha de la notificación
-  date: {fontSize: 12, color: 'gray', marginTop: 3, fontFamily: 'Poppins-Bold'},
-
-  // Imagen del feed a la derecha
-  feedImage: {width: 50, height: 50, borderRadius: 8, marginLeft: 10},
-  goBackButton: {
-    backgroundColor: '#007BFF',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 10,
-    alignSelf: 'flex-start',
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
   },
-  rayita: {
-    height: 1,
-    backgroundColor: '#ccc',
-    marginVertical: 10,
-    width: '100%',
+  textContainer: {
+    flex: 1,
+    justifyContent: 'center',
   },
-  rayita: {
-    height: 1,
-    backgroundColor: '#ccc',
-    marginVertical: 10,
-    width: '100%',
+  message: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  date: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  feedImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 6,
+    marginLeft: 10,
   },
 });
 

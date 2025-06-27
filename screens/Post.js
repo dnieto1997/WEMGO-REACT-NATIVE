@@ -52,10 +52,22 @@ const Post = ({navigation, route}) => {
      const [userFeedId, setUserFeedId] = useState(null);
        const [currentFeedId, setCurrentFeedId] = useState(null);
         const [isModalVisible2, setModalVisible2] = useState(false);
+        const commentId = route?.params?.commentId || null;
+        const [showComments, setShowComments] = useState(false);
+const [focusCommentId, setFocusCommentId] = useState(null);
+
+
 
   const {listenForReactions, sendReactionNotification} =
     useContext(SocketContext);
 
+
+useEffect(() => {
+  if (commentId) {
+    setModalVisible(true);
+  }
+}, [commentId]);
+   
   // Carga info del usuario desde AsyncStorage
   useEffect(() => {
     const loadUserData = async () => {
@@ -404,6 +416,8 @@ const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
             onClose={() => setModalVisible(false)}
             onCommentAdded={() => fetchFeed(1)}
             onCommentDeleted={() => fetchFeed(1)}
+            focusCommentId={focusCommentId}
+           
           />
         </View>
 

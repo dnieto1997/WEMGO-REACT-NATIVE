@@ -72,6 +72,9 @@ import {
   PrivacySettings,
   PublicPatchScreen,
   PrivatePatchScreen,
+  Parches,
+  DetailsParches,
+  ChatParche,
 } from '../screens';
 import BottomTabNavigation from './BottomTabNavigation';
 import {navigationRef} from '../utils/NavigationService';
@@ -149,10 +152,13 @@ const AppNavigation = () => {
         <Stack.Screen name="ForgetPassword" component={ForgetPassword} />
          <Stack.Screen name="PublicPatchScreen" component={PublicPatchScreen} />
           <Stack.Screen name="PrivatePatchScreen" component={PrivatePatchScreen} />
+           <Stack.Screen name="DetailsParches" component={DetailsParches} />
+             <Stack.Screen name="ChatParche" component={ChatParche} />
         <Stack.Screen
           name="ForgetPasswordEmailCode"
           component={ForgetPasswordEmailCode}
         />
+         <Stack.Screen name="Parches" component={Parches} />
         <Stack.Screen name="FriendTimeline" component={FriendTimeline} />
         <Stack.Screen name="Gender" component={Gender} />
         <Stack.Screen name="GroupVideoCall" component={GroupVideoCall} />

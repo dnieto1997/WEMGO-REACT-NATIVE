@@ -125,16 +125,15 @@ const EventDetails = ({navigation, route}) => {
     }
   };
 
-  const handleOption = (type) => {
-    console.log(type)
-    setModalVisible(false);
-    if (type === 'public') {
-     navigation.navigate('PublicPatchScreen', { id: id });
-    } else {
-    navigation.navigate('PrivatePatchScreen', {  id: id });
-    }
-  };
-
+const handleOption = (type) => {
+  console.log(type);
+  setModalVisible1(false); // ← cerrar correctamente el modal
+  if (type === 'public') {
+    navigation.navigate('PublicPatchScreen', { id });
+  } else {
+    navigation.navigate('PrivatePatchScreen', { id });
+  }
+};
   // MODIFICADO: Confirmar asistencia con modal y mostrar QR
   const toggleAttendance = async () => {
     if (attending) {
@@ -330,7 +329,7 @@ const downloadQrImage = async () => {
        {attending && (
   <TouchableOpacity
     style={{alignItems: 'center'}}
-    onPress={() =>/*  setModalVisible1(true) */ console.log("algo")}>
+    onPress={() =>setModalVisible1(true) }>
     <Ionicons
       name="people"
       size={30}
@@ -591,7 +590,7 @@ const downloadQrImage = async () => {
 
             <TouchableOpacity
               style={styles.cancelButton1}
-              onPress={() => setModalVisible(false)}>
+              onPress={() => setModalVisible1(false)}>
               <Text style={styles.cancelText1}>Cancelar</Text>
             </TouchableOpacity>
           </View>

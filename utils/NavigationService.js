@@ -10,3 +10,12 @@ export function navigate(name, params) {
     console.warn('Navigation is not ready');
   }
 }
+
+
+export function push(name, params) {
+  if (navigationRef.isReady()) {
+    navigationRef.dispatch(StackActions.push(name, params));
+  } else {
+    console.warn('Navigation is not ready');
+  }
+}

@@ -12,8 +12,9 @@ const Tab = () => {
     const route = useRoute();
 
     const screens = [
-        { name: "Explore", route: "Explore", icon: "calendar-outline", iconType: "MaterialCommunityIcons" },
+      
         { name: "Event", route: "Event", icon: "home", iconType: "MaterialCommunityIcons" },
+          { name: "Explore", route: "Explore", icon: "calendar-outline", iconType: "MaterialCommunityIcons" },
         { name: "Create", route: "CreateEventV2", icon: "plus", iconType: "Entypo", isCenter: true },
         { name: "Todo", route: "Todo", icon: "account-plus", iconType: "MaterialCommunityIcons" },
         { name: "Profile", route: "Profile", icon: "account-edit", iconType: "MaterialCommunityIcons" },
