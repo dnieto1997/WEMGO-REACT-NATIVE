@@ -4,6 +4,7 @@ import {
   NavigationContainer,
   createNavigationContainerRef,
 } from '@react-navigation/native';
+
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {SocketContext} from '../context/SocketContext';
@@ -75,6 +76,7 @@ import {
   Parches,
   DetailsParches,
   ChatParche,
+  AddPublicParche,
 } from '../screens';
 import BottomTabNavigation from './BottomTabNavigation';
 import {navigationRef} from '../utils/NavigationService';
@@ -130,6 +132,8 @@ const AppNavigation = () => {
     initialRoute = 'Login';
   }
 
+
+
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
@@ -154,6 +158,7 @@ const AppNavigation = () => {
           <Stack.Screen name="PrivatePatchScreen" component={PrivatePatchScreen} />
            <Stack.Screen name="DetailsParches" component={DetailsParches} />
              <Stack.Screen name="ChatParche" component={ChatParche} />
+               <Stack.Screen name="AddPublicParche" component={AddPublicParche} />
         <Stack.Screen
           name="ForgetPasswordEmailCode"
           component={ForgetPasswordEmailCode}

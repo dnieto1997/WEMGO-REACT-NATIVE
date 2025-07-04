@@ -1,31 +1,36 @@
 // HeaderHome.js
 import React from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
-const HeaderHome = ({ title, navigation, unreadCount, DataUser }) => {
+const HeaderHome = ({ title, navigation, unreadCount = 0,unreadCountNotifications=0, DataUser = {} }) => {
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         <Image
-          source={require('../assets/images/logo.png')} // Ajusta ruta si es necesario
+          source={require('../assets/images/logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
         {title && <Text style={styles.titleText}>{title}</Text>}
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 5 }}>
+      <View style={styles.actions}>
         <TouchableOpacity
           style={styles.iconButton}
-          onPress={() => navigation.navigate('Notifications', { id: DataUser.id })}
+          onPress={() => navigation.navigate('Notifications', { id: DataUser?.id })}
         >
           <MaterialCommunityIcons name="bell" color={'white'} size={30} />
+              {unreadCountNotifications > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCountNotifications}</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => navigation.navigate('Message')}
-          style={styles.iconButton}
+          style={[styles.iconButton, { marginLeft: 10 }]}
         >
           <MaterialCommunityIcons name="message-text" color={'white'} size={30} />
           {unreadCount > 0 && (
@@ -39,7 +44,7 @@ const HeaderHome = ({ title, navigation, unreadCount, DataUser }) => {
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -59,6 +64,10 @@ const styles = {
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   iconButton: {
     width: 40,
@@ -84,6 +93,6 @@ const styles = {
     fontSize: 10,
     fontWeight: 'bold',
   },
-};
+});
 
 export default HeaderHome;

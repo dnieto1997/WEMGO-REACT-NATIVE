@@ -68,6 +68,8 @@ import PrivatePatchScreen from './PrivatePatchScreen';
 import Parches from './Parches';
 import DetailsParches from './DetailsParches';
 import ChatParche from './ChatParche';
+import AddPublicParche from './AddPublicParche';
+
 
 
 
@@ -139,5 +141,6 @@ export {
   PublicPatchScreen,
   Parches,
   DetailsParches,
-  ChatParche
+  ChatParche,
+  AddPublicParche
 };

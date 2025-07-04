@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-//const BASE_URL = "http://192.168.1.17:3002/V1/";
-const BASE_URL = "https://wemgo.online/wemgo/";
+const BASE_URL = "http://192.168.1.12:3002/V1/";
+//const BASE_URL = "https://wemgo.online/wemgo/";
 
 
 

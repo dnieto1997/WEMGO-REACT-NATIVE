@@ -42,7 +42,7 @@ const CommentItem = ({
   const [editCommentText, setEditCommentText] = useState('');
   const [likecomment, setLikecomment] = useState(false);
   const [likereply, setLikereply] = useState(false);
-
+const [isSendingComment, setIsSendingComment] = useState(false);
 const [showSuggestions, setShowSuggestions] = useState(false);
 const [suggestions, setSuggestions] = useState([]);
 const [mentionQuery, setMentionQuery] = useState('');
@@ -50,19 +50,13 @@ const [mentionStart, setMentionStart] = useState(-1);
 const [mentionObj, setMentionObj] = useState(null);
  const [keyboardHeight, setKeyboardHeight] = useState(0);
  const flatListRef = React.useRef(null);
+ const [mentionList, setMentionList] = useState([]);
 
 
 
   const {sendCommentNotification, listenForCommentNotifications} =
     useContext(SocketContext); // Integrar sockets
 
-  useFocusEffect(
-    React.useCallback(() => {
-      return () => {
-        onClose();
-      };
-    }, []),
-  );
 
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', e => {
@@ -175,24 +169,42 @@ useEffect(() => {
     }
   };
 
+  const extractMentions = async (text) => {
+  const mentionRegex = /@([\w\s]+)/g;
+  const mentions = [...text.matchAll(mentionRegex)].map(m => m[1].trim());
+
+  const res = await Promise.all(
+    mentions.map(async (name) => {
+      const searchRes = await getHttps(`users/search/${name}`);
+      const foundUser = searchRes.data.find(u =>
+        `${u.first_name} ${u.last_name}`.toLowerCase() === name.toLowerCase()
+      );
+      return foundUser ? { id: foundUser.id, name: `@${name}` } : null;
+    })
+  );
+
+  return res.filter(Boolean); // eliminar nulls
+};
+
 const addComment = async () => {
   if (!newComment.trim()) return;
-
-  let id_user_mention = null;
-  let user_mention = null;
-  if (mentionObj && newComment.includes(mentionObj.name)) {
-    id_user_mention = mentionObj.id;
-    user_mention = mentionObj.name;
-  }
+  setIsSendingComment(true);
 
   try {
-    const response = await postHttps('comments', {
-      id_feed: feedId,
+    const id_user_mention = mentionList.map(m => m.id);
+    const user_mention = mentionList.map(m => m.name);
+
+    const payload={
+ id_feed: feedId,
       comments: newComment,
-      id_user_mention,
-      user_mention,
-    });
-         console.log(response.data)
+      id_user_mention: JSON.stringify(id_user_mention),
+      user_mention: JSON.stringify(user_mention),
+    }
+
+
+
+    const response = await postHttps('comments', payload);
+
     const newCommentData = {
       commentId: response.data.id,
       commentText: newComment,
@@ -203,19 +215,21 @@ const addComment = async () => {
       idUserMention: id_user_mention,
       userMention: user_mention,
     };
-     
-    
+
     sendCommentNotification(newCommentData);
 
-    setComments(prevComments => [...prevComments, newCommentData]);
+    setComments(prev => [...prev, newCommentData]);
     setNewComment('');
-    setMentionObj(null);
+    setMentionList([]); // reset
     setShowSuggestions(false);
     onCommentAdded();
   } catch (error) {
     console.error('Error adding comment:', error);
+  } finally {
+    setIsSendingComment(false);
   }
 };
+
 
 
 
@@ -291,16 +305,26 @@ const addComment = async () => {
 
 const handleSelectMention = (user) => {
   if (mentionStart === -1) return;
+
+  const fullName = `${user.name}`;
+  const mentionText = `@${fullName}`;
+
   const before = newComment.slice(0, mentionStart);
   const after = newComment.slice(mentionStart + mentionQuery.length + 1);
-  const mentionText = `@${user.name}`;
   const fullText = before + mentionText + after;
   setNewComment(fullText);
-  setMentionObj({ id: user.id, name: mentionText });
+
+  setMentionList(prev => {
+    const alreadyMentioned = prev.some(m => m.id === user.id);
+    if (alreadyMentioned) return prev;
+    return [...prev, { id: user.id, name: mentionText }];
+  });
+
   setShowSuggestions(false);
   setMentionQuery('');
   setMentionStart(-1);
 };
+
 
   const navigateToProfile = userId => {
     onClose();
@@ -411,7 +435,7 @@ const handleSelectMention = (user) => {
             source={{
               uri:
                 item.replyUser?.users_img ||
-                'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
+                'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
             }}
             style={styles.commentImage}
           />
@@ -459,28 +483,54 @@ const handleSelectMention = (user) => {
     </View>
   );
 
-/*   const renderCommentText = (item) => (
-  <Text style={styles.commentText}>
-    <Text onPress={() => navigateToProfile(item.userId)} style={{ color: '#944af4' }}>
-      {item.userFirstName} {item.userLastName}
-    </Text>{' '}
-    {item.userMention && item.idUserMention ? (
-      <>
-        {item.commentText.split(item.userMention)[0]}
+const renderCommentText = (item) => {
+  const content = item.commentText;
+
+  let idMentionList = [];
+  let userMentionList = [];
+
+  try {
+    idMentionList = Array.isArray(item.idUserMention)
+      ? item.idUserMention
+      : JSON.parse(item.idUserMention || '[]');
+    userMentionList = Array.isArray(item.userMention)
+      ? item.userMention
+      : JSON.parse(item.userMention || '[]');
+  } catch {
+    return <Text style={styles.commentText}>{content}</Text>;
+  }
+
+  if (!userMentionList.length || !idMentionList.length) {
+    return <Text style={styles.commentText}>{content}</Text>;
+  }
+
+  let result = [];
+  let currentIndex = 0;
+
+  userMentionList.forEach((mention, i) => {
+    const index = content.indexOf(mention, currentIndex);
+    if (index !== -1) {
+      const before = content.substring(currentIndex, index);
+      result.push(<Text key={`before-${i}`} style={styles.commentText}>{before}</Text>);
+      result.push(
         <Text
-          style={{ color: '#944af4' }}
-          onPress={() => navigateToProfile(item.idUserMention)}
+          key={`mention-${i}`}
+          style={{ color: '#944af4', fontWeight: 'bold' }}
+          onPress={() => navigateToProfile(idMentionList[i])}
         >
-          {item.userMention}
+          {mention}
         </Text>
-        {item.commentText.split(item.userMention)[1]}
-      </>
-    ) : (
-      item.commentText
-    )}
-  </Text>
-); */
- const renderComment = ({ item }) => (
+      );
+      currentIndex = index + mention.length;
+    }
+  });
+
+  result.push(<Text key="after" style={styles.commentText}>{content.substring(currentIndex)}</Text>);
+  return <Text>{result}</Text>;
+};
+
+
+const renderComment = ({ item }) => (
   <View style={styles.commentContainer}>
     <TouchableOpacity onPress={() => navigateToProfile(item.userId)}>
       <View style={styles.commentHeader}>
@@ -488,7 +538,7 @@ const handleSelectMention = (user) => {
           source={{
             uri:
               item.userImg ||
-              'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
+              'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
           }}
           style={styles.commentImage}
         />
@@ -498,30 +548,15 @@ const handleSelectMention = (user) => {
       </View>
     </TouchableOpacity>
 
-    {editingComment === item.commentId ? (
-      <TextInput
-        style={styles.input}
-        value={editCommentText}
-        onChangeText={setEditCommentText}
-      />
-    ) : (
-      <Text style={styles.commentText}>
-        {item.userMention && item.idUserMention ? (
-          <>
-            {item.commentText.split(item.userMention)[0]}
-            <Text
-              style={{ color: '#944af4' }}
-              onPress={() => navigateToProfile(item.idUserMention)}
-            >
-              {item.userMention}
-            </Text>
-            {item.commentText.split(item.userMention)[1]}
-          </>
-        ) : (
-          item.commentText
-        )}
-      </Text>
-    )}
+   {editingComment === item.commentId ? (
+  <TextInput
+    style={styles.input}
+    value={editCommentText}
+    onChangeText={setEditCommentText}
+  />
+) : (
+  renderCommentText(item)
+)}
 
     <View style={{ margin: 8 }} />
 
@@ -609,9 +644,13 @@ const handleSelectMention = (user) => {
             value={newComment}
             onChangeText={handleCommentChange}
           />
-          <TouchableOpacity style={styles.replySendButton} onPress={addComment}>
-            <MaterialIcons name="send" size={30} color="white" />
-          </TouchableOpacity>
+       <TouchableOpacity
+  style={[styles.replySendButton, isSendingComment && { opacity: 0.5 }]}
+  onPress={addComment}
+  disabled={isSendingComment}
+>
+  <MaterialIcons name="send" size={30} color="white" />
+</TouchableOpacity>
         </View>
       </View>
 

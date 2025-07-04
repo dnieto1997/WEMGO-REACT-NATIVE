@@ -43,6 +43,7 @@ const Login = ({navigation}) => {
           user: response.data.user,
           firstName: response.data.first_name,
           lastName: response.data.last_name,
+            img: response.data.img,
           role: response.data.role,
           status: response.data.status,
           country: response.data.country,

@@ -12,7 +12,8 @@ import {
   Alert,
   PermissionsAndroid,
   Platform,
-  Linking
+  Linking,
+  Share
 } from 'react-native';
 import React, {useEffect, useState} from 'react';
 import {COLORS, SIZES, FONTS, icons} from '../constants';
@@ -25,6 +26,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import CommentEvents from '../components/CommentEvents';
 import RNBlobUtil from 'react-native-blob-util';
+import FastImage from 'react-native-fast-image';
+import EventLikes from '../components/EventLikes';
+
+
 
 
 const {width} = Dimensions.get('window');
@@ -39,6 +44,8 @@ const EventDetails = ({navigation, route}) => {
   const [isModalVisible, setModalVisible] = useState(false);
   const [commentEventId, setCommentEventId] = useState(null);
     const [modalVisible1, setModalVisible1] = useState(false);
+      const FIXED_HEIGHT = 450;
+      const ITEM_WIDTH = Dimensions.get('window').width -20;
 
   // Estados para QR y modales
   const [showAttendModal, setShowAttendModal] = useState(false);
@@ -46,6 +53,8 @@ const EventDetails = ({navigation, route}) => {
   const [qrDiscount, setQrDiscount] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [likesModalVisible, setLikesModalVisible] = useState(false);
+const [commentsModalVisible, setCommentsModalVisible] = useState(false);
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -129,44 +138,68 @@ const handleOption = (type) => {
   console.log(type);
   setModalVisible1(false); // ← cerrar correctamente el modal
   if (type === 'public') {
-    navigation.navigate('PublicPatchScreen', { id });
+    navigation.navigate('AddPublicParche', { id });
   } else {
     navigation.navigate('PrivatePatchScreen', { id });
   }
 };
   // MODIFICADO: Confirmar asistencia con modal y mostrar QR
-  const toggleAttendance = async () => {
-    if (attending) {
-      // Si ya asiste, cancelar asistencia normal
-      try {
-        await postHttps('event-user', {event: id, discount: event.discount});
-        setAttending(false);
-        setQrCoupon(null);
-        setQrDiscount(null);
-      } catch (error) {}
-      return;
-    }
-    // Mostrar modal de confirmación
-    setShowAttendModal(true);
-  };
+const toggleAttendance = async () => {
+  const discountValue = event?.discount ? event.discount : "0";
 
-  const confirmAttendance = async () => {
-    setQrLoading(true);
+  if (attending) {
     try {
-      const res = await postHttps('event-user', {event: id, discount: event.discount});
-      if (res.data && res.data.coupon) {
-        setQrCoupon(res.data.coupon);
-        setQrDiscount(res.data.discount);
-        setAttending(true);
-        setShowQrModal(true);
-      }
+      await postHttps('event-user', { event: id, discount: discountValue });
+      setAttending(false);
+      setQrCoupon(null);
+      setQrDiscount(null);
     } catch (error) {
-      Alert.alert('Error', 'No se pudo registrar la asistencia.');
+      console.error(error);
     }
-    setQrLoading(false);
-    setShowAttendModal(false);
-  };
+    return;
+  }
 
+  setShowAttendModal(true);
+};
+
+const confirmAttendance = async () => {
+  setQrLoading(true);
+  const discountValue = event?.discount ? event.discount : "0";
+
+  try {
+    const res = await postHttps('event-user', { event: id, discount: discountValue });
+    
+    if (discountValue === "0") {
+      setAttending(true);
+    } else if (res.data && res.data.coupon) {
+      setQrCoupon(res.data.coupon);
+      setQrDiscount(res.data.discount);
+      setAttending(true);
+      setShowQrModal(true);
+    }
+  } catch (error) {
+    Alert.alert('Error', 'No se pudo registrar la asistencia.');
+  }
+  
+  setQrLoading(false);
+  setShowAttendModal(false);
+};
+
+
+
+    const handleShareProfile = async () => {
+      try {
+        const {data} = await getHttps(
+          `shortlink/generate?type=event&id=${event.id}`,
+        );
+        console.log(data)
+        await Share.share({
+          message: `Mira este Evento en Wemgo:\n${data.url}`,
+        });
+      } catch (err) {
+        console.error('Error al compartir perfil:', err);
+      }
+    };
 
 const downloadQrImage = async () => {
   try {
@@ -283,7 +316,16 @@ const downloadQrImage = async () => {
                   horizontal
                   keyExtractor={(img, index) => index.toString()}
                   renderItem={({item}) => (
-                    <Image source={{uri: item}} style={styles.eventImage} />
+                     <View
+                                        style={{
+        width: ITEM_WIDTH,
+        height: FIXED_HEIGHT,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#000',
+      }}>
+                    <FastImage source={{uri: item}}  style={{width: ITEM_WIDTH, height: FIXED_HEIGHT}} />
+                    </View>
                   )}
                   pagingEnabled
                   showsHorizontalScrollIndicator={false}
@@ -293,52 +335,81 @@ const downloadQrImage = async () => {
             ) : (
               <Image source={icons.placeholder} style={styles.eventImage} />
             )}
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-around',
-                alignItems: 'center',
-                marginVertical: 10,
-              }}>
-              {/* Botón Me gusta */}
-              <TouchableOpacity
-                style={{alignItems: 'center'}}
-                onPress={toggleLike}>
-                <Ionicons
-                  name="heart"
-                  size={30}
-                  color={liked ? 'red' : 'gray'}
-                />
-                <Text style={{fontSize: 12, color: liked ? 'red' : 'gray'}}>
-                  {liked ? 'Te gusta' : 'Me gusta'}
-                </Text>
-              </TouchableOpacity>
+      <View style={{flexDirection: 'row', justifyContent: 'space-around', marginTop: 10}}>
+  {/* Botón Me gusta */}
+  <View style={{alignItems: 'center'}}>
+    <TouchableOpacity onPress={toggleLike}>
+      <Ionicons
+        name={liked ? 'heart' : 'heart-outline'}
+        size={30}
+        color={liked ? 'red' : 'gray'}
+      />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => setLikesModalVisible(true)}>
+      <Text style={{fontSize: 12, color: 'gray'}}>
+        {event?.total_likes || 0} {event?.total_likes === 1 ? 'like' : 'likes'}
+      </Text>
+    </TouchableOpacity>
+  </View>
 
-              {/* Botón Comentarios */}
-              <TouchableOpacity
-                style={{alignItems: 'center'}}
+  {/* Botón Comentarios */}
+  <View style={{alignItems: 'center'}}>
+    <TouchableOpacity
+      onPress={() => {
+        setCommentEventId(event.id);
+        setModalVisible(true);
+      }}>
+      <Ionicons name="chatbubble-outline" size={30} color="gray" />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={() => setCommentsModalVisible(true)}>
+      <Text style={{fontSize: 12, color: 'gray'}}>
+        {event?.total_comments || 0}{' '}
+        {event?.total_comments === 1 ? 'comentario' : 'comentarios'}
+      </Text>
+    </TouchableOpacity>
+  </View>
+
+    <View style={{alignItems: 'center'}}>
+      <TouchableOpacity
                 onPress={() => {
-                  setCommentEventId(event.id);
-                  setModalVisible(true);
-                }}>
-                <Ionicons name="chatbubble-outline" size={30} color="gray" />
-                <Text style={{fontSize: 12, color: 'gray'}}>Comentarios</Text>
+                  handleShareProfile();
+                }}
+                >
+                <Ionicons
+                  name="share-social-outline"
+                  size={30}
+                  color="white"
+                />
               </TouchableOpacity>
+                <Text style={{fontSize: 12, color: 'gray'}}>
+       Compartir
+      </Text>
+  </View>
 
-              {/* Botón Armar parche */}
-       {attending && (
-  <TouchableOpacity
-    style={{alignItems: 'center'}}
-    onPress={() =>setModalVisible1(true) }>
-    <Ionicons
-      name="people"
-      size={30}
-      color={COLORS.primary}
-    />
-    <Text style={{fontSize: 12, color: COLORS.primary}}>Armar parche</Text>
-  </TouchableOpacity>
-)}
-            </View>
+  {/* Botón Armar Parche */}
+  <View style={{alignItems: 'center', opacity: attending ? 1 : 0.4}}>
+    <TouchableOpacity
+      onPress={() => attending && setModalVisible1(true)}
+      disabled={!attending}>
+      <Ionicons
+        name="people"
+        size={30}
+        color={attending ? COLORS.primary : 'gray'}
+      />
+    </TouchableOpacity>
+    <Text
+      style={{
+        fontSize: 12,
+        color: attending ? COLORS.primary : 'gray',
+        marginTop: 4,
+      }}>
+      Parche
+    </Text>
+  </View>
+
+
+</View>
+
 
             {/* OJO para ver el cupón si ya está registrado */}
 {/*             {attending && qrCoupon && (
@@ -453,7 +524,7 @@ const downloadQrImage = async () => {
 
               {/* Precio del ticket */}
               <View style={{marginBottom: 24}}>
-                <View
+               {/*  <View
                   style={{flexDirection: 'row', alignItems: 'center', top: 12}}>
                   <Ionicons
                     name="cash-outline"
@@ -467,7 +538,7 @@ const downloadQrImage = async () => {
                       ? `$${event.price_ticket}`
                       : 'Gratis'}
                   </Text>
-                </View>
+                </View> */}
               </View>
             </View>
           </View>
@@ -501,9 +572,11 @@ const downloadQrImage = async () => {
             alignItems:'center'
           }}>
             <Text style={{fontSize:18, fontWeight:'bold', marginBottom:8, color:'black'}}>¿Quieres asistir a este evento?</Text>
-            <Text style={{fontSize:16, color:'black', marginBottom:16}}>
-              Obtendrás un cupón de descuento del <Text style={{fontWeight:'bold'}}>{event.discount}%</Text>
-            </Text>
+            <Text style={{ fontSize: 16, color: 'black', marginBottom: 16 }}>
+        {event.discount && Number(event.discount) > 0
+          ? `Obtendrás un cupón de descuento del ${event.discount}%`
+          : '¿Confirmas tu asistencia al evento?'}
+      </Text>
             <View style={{flexDirection:'row', marginTop:8}}>
               <TouchableOpacity
                 style={{marginRight:16, backgroundColor:'#ccc', padding:10, borderRadius:8}}
@@ -596,6 +669,12 @@ const downloadQrImage = async () => {
           </View>
         </View>
       </Modal>
+
+      <EventLikes
+  eventId={event.id}
+  isVisible={likesModalVisible}
+  onClose={() => setLikesModalVisible(false)}
+/>
 
       <CommentEvents
         eventId={event.id}

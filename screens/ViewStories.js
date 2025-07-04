@@ -927,7 +927,7 @@ const ViewStories = ({route}) => {
                         source={{
                           uri: item.img
                             ? item.img
-                            : 'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
+                            : 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
                         }}
                         style={modalstyles.profileImage}
                       />
@@ -976,7 +976,7 @@ const ViewStories = ({route}) => {
                         source={{
                           uri: item.img
                             ? item.img
-                            : 'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
+                            : 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
                         }}
                         style={modalstyles.profileImage}
                       />

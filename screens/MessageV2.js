@@ -116,7 +116,7 @@ const MessageV2 = ({navigation}) => {
             user.id === DataUser.id ? 0 : user.unreadMessages || 0,
           userImg:
             user.img ||
-            'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
+            'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
           isOnline: onlineUsers.some(onlineUser => onlineUser.id == user.id),
           lastMessage,
           lastMessageTime,
@@ -159,7 +159,7 @@ const MessageV2 = ({navigation}) => {
           messageInQueue: 0,
           userImg:
             user.img ||
-            'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
+            'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
         }));
 
         setFilteredUsers(formattedResults);

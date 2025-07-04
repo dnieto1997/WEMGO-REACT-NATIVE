@@ -118,6 +118,8 @@ const [loadingUsers, setLoadingUsers] = useState(false);
     try {
       const payload = { event_id: id, invitedUsers: JSON.stringify(selected) };
      const response= await postHttps('parche-user', payload);
+     console.log(response.data)
+   
  
                
   sendInvitationNotification?.({
@@ -128,9 +130,12 @@ const [loadingUsers, setLoadingUsers] = useState(false);
 
       navigation.navigate('Parches', { selectedTab: 'PRIVATE' });
       setSelected([]);
-    } catch (err) {
-      console.error('Error enviando invitaciones:', err);
-      Alert.alert('Error', 'No se pudieron enviar las invitaciones');
+    } catch (error) {
+      console.log('Error enviando invitaciones:', error);
+
+
+
+  Alert.alert('Error', 'Ya creaste un parche asociado a este evento');
     }
   };
 

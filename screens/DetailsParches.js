@@ -30,7 +30,8 @@ const DetailsParches = ({route}) => {
   const [loading, setLoading] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
   const [dataUser, setDataUser] = useState({});
-
+const FIXED_HEIGHT = 450;
+      const ITEM_WIDTH = Dimensions.get('window').width -20;
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [addableUsers, setAddableUsers] = useState([]);
   const [selectedToAdd, setSelectedToAdd] = useState([]);
@@ -104,7 +105,7 @@ const DetailsParches = ({route}) => {
         `followers/addparcheuser?page=${pageToLoad}&limit=200&parcheid=${id}&event_id=${parche.event_id}`,
       );
 
-      console.log(response.data);
+
 
       const newUsers = response?.data?.users || [];
       const total = response?.data?.totalPages || 1;
@@ -133,9 +134,9 @@ const DetailsParches = ({route}) => {
         parcheid:parche.id
       };
 
-      console.log(payload)
+     
       const response = await postHttps('parche-user/enviarinvitacion', payload);
-      console.log(response.data)
+
 
       sendInvitationNotification?.({
         parchId:id,
@@ -267,7 +268,7 @@ const DetailsParches = ({route}) => {
   };
 
   const renderImage = ({item}) => (
-    <Image source={{uri: item}} style={styles.eventImage} />
+    <Image source={{uri: item}}  style={{width: ITEM_WIDTH, height: FIXED_HEIGHT}} />
   );
 
   if (loading || !parche) {

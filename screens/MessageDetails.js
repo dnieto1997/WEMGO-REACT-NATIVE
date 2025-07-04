@@ -8,17 +8,31 @@ import {
   Platform,
   Image,
   useColorScheme,
+  Modal,
+  Alert,
+  ActivityIndicator,
+  Dimensions,
+  PermissionsAndroid,
+  Linking
 } from 'react-native';
 import React, {useState, useEffect, useCallback, useContext} from 'react';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {Bubble, GiftedChat} from 'react-native-gifted-chat';
 import {SocketContext} from '../context/SocketContext';
-import {getHttps, patchHttps} from '../api/axios';
+import {getHttps, patchHttps, postHttpsStories} from '../api/axios';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import {COLORS} from '../constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useFocusEffect} from '@react-navigation/native';
+
+import {pick} from '@react-native-documents/picker';
+import {launchImageLibrary, launchCamera} from 'react-native-image-picker';
+import RNFS from 'react-native-fs';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+import FastImage from 'react-native-fast-image';
+import VideoPost from '../components/VideoPost';
 
 const MessageDetails = ({navigation, route}) => {
   const {id} = route.params;
@@ -29,6 +43,18 @@ const MessageDetails = ({navigation, route}) => {
   const colorScheme = useColorScheme();
   const isDarkMode = colorScheme === 'dark';
   const [inputHeight, setInputHeight] = useState(40);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showFileModal, setShowFileModal] = useState(false);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [currentDownloadJob, setCurrentDownloadJob] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewType, setPreviewType] = useState(null); // 'image' | 'video'
+  const [previewUrl, setPreviewUrl] = useState('');
+  const ITEM_WIDTH = Dimensions.get('window').width - 40;
+  const FIXED_HEIGHT = 450;
+  const [isSending, setIsSending] = useState(false);
+  const [showAttachmentModal, setShowAttachmentModal] = useState(false);
 
   useEffect(() => {
     const loadAndFetch = async () => {
@@ -42,6 +68,9 @@ const MessageDetails = ({navigation, route}) => {
     loadAndFetch();
   }, [id]);
 
+
+  
+
   const loadUserData = async () => {
     try {
       const data = await AsyncStorage.getItem('userData');
@@ -53,7 +82,6 @@ const MessageDetails = ({navigation, route}) => {
     }
   };
 
-  // Emitir eventos socket para chat activo/inactivo
   useFocusEffect(
     useCallback(() => {
       const setActive = async () => {
@@ -62,7 +90,7 @@ const MessageDetails = ({navigation, route}) => {
           if (data && socket) {
             const parsedData = JSON.parse(data);
             const userId = parsedData.id;
-            socket.emit('setChatActive', { senderId: userId, receiverId: id });
+            socket.emit('setChatActive', {senderId: userId, receiverId: id});
           }
         } catch (error) {
           console.error('Error obteniendo userId:', error);
@@ -73,6 +101,7 @@ const MessageDetails = ({navigation, route}) => {
 
       return async () => {
         try {
+          Keyboard.dismiss();
           const data = await AsyncStorage.getItem('userData');
           if (data && socket) {
             const parsedData = JSON.parse(data);
@@ -85,7 +114,144 @@ const MessageDetails = ({navigation, route}) => {
         }
       };
     }, [id, socket]),
+    
   );
+
+
+
+  const requestCameraPermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+        ]);
+
+        const allGranted = Object.values(granted).every(
+          v => v === PermissionsAndroid.RESULTS.GRANTED,
+        );
+
+        if (!allGranted) {
+          Alert.alert(
+            'Permiso requerido',
+            'Por favor habilita los permisos de cámara y almacenamiento para usar esta función.',
+          );
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.warn(err);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const downloadFile = async (fileUrl, fileName, messageId) => {
+    try {
+      setDownloadingId(messageId);
+      setDownloadProgress(0);
+
+      const destPath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+
+      const download = RNFS.downloadFile({
+        fromUrl: fileUrl,
+        toFile: destPath,
+        progressDivider: 1,
+        progress: data => {
+          const percentage = data.bytesWritten / data.contentLength;
+          setDownloadProgress(percentage);
+        },
+      });
+
+      setCurrentDownloadJob(download); // ✅ guarda el job para cancelar si es necesario
+
+      await download.promise;
+
+      setDownloadProgress(1);
+
+      // ✅ mostrar verde completo por 0.5s
+      setTimeout(() => {
+        setDownloadingId(null);
+        setDownloadProgress(0);
+        setCurrentDownloadJob(null); // limpia job
+      }, 500);
+    } catch (error) {
+      console.error('Error al descargar archivo:', error);
+      setDownloadingId(null);
+      setDownloadProgress(0);
+      setCurrentDownloadJob(null);
+    }
+  };
+
+  const cancelDownload = () => {
+    if (currentDownloadJob) {
+      currentDownloadJob.stop(); // ✅ cancela la descarga en RNFS
+      setDownloadingId(null);
+      setDownloadProgress(0);
+      setCurrentDownloadJob(null);
+      console.log('Descarga cancelada');
+    }
+  };
+
+
+
+  const getFileIcon = fileType => {
+    if (!fileType) return 'insert-drive-file';
+
+    if (fileType.includes('pdf')) return 'picture-as-pdf';
+    if (fileType.includes('excel') || fileType.includes('spreadsheet'))
+      return 'grid-on';
+    if (fileType.includes('audio')) return 'audiotrack';
+    if (fileType.includes('image')) return 'image';
+    if (fileType.includes('video')) return 'videocam';
+
+    return 'insert-drive-file';
+  };
+  const openAttachmentMenu = () => setShowAttachmentModal(true);
+
+  const pickImageOrVideo = () => {
+    launchImageLibrary({mediaType: 'mixed'}, response => {
+      if (response.assets?.length) {
+        setSelectedFile(response.assets[0]);
+        setShowFileModal(true);
+      }
+    });
+  };
+
+  const pickDocument = async () => {
+    try {
+      const [res] = await pick({
+        mode: 'open',
+        type: '*/*',
+        requestLongTermAccess: false,
+      });
+
+      if (res && res.uri && res.name) {
+        const destPath = `${RNFS.DownloadDirectoryPath}/${res.name}`;
+
+        const fileContents = await RNFS.readFile(res.uri, 'base64');
+        await RNFS.writeFile(destPath, fileContents, 'base64');
+
+        setSelectedFile({
+          uri: res.uri,
+          type: res.type,
+          fileName: res.name,
+          size: res.size,
+        });
+        setShowFileModal(true);
+      }
+    } catch (err) {
+      if (err?.code === 'DOCUMENT_PICKER_CANCELED') {
+        console.log('Selección cancelada');
+      } else {
+        console.error('Error al seleccionar documento:', err);
+        Alert.alert('Error', 'No se pudo procesar el documento.');
+      }
+    }
+  };
 
   const fetchMessages = useCallback(async () => {
     if (!id) return;
@@ -95,6 +261,9 @@ const MessageDetails = ({navigation, route}) => {
         _id: msg.id,
         text: msg.content,
         createdAt: new Date(msg.timestamp),
+        fileUrl: msg.fileUrl,
+        fileName: msg.fileName,
+        fileType: msg.fileType,
         user: {
           _id: msg.sender.id,
           name: msg.sender.fullName,
@@ -110,65 +279,120 @@ const MessageDetails = ({navigation, route}) => {
     }
   }, [id]);
 
-  useEffect(() => {
-    if (socket) {
-      const handleNewMessage = newMessage => {
-        if (newMessage.sender.id === id || newMessage.receiver.id === id) {
-          setChatMessages(prev =>
-            GiftedChat.append(prev, [
-              {
-                _id: newMessage.id,
-                text: newMessage.content,
-                createdAt: new Date(newMessage.timestamp),
-                user: {
-                  _id: newMessage.sender.id,
-                  name: newMessage.sender.fullName,
-                  avatar: newMessage.sender.img,
-                },
-                story: newMessage.story || null,
-                isRead:
-                  newMessage.sender.id === DataUser.id ? 1 : newMessage.isRead,
-              },
-            ]),
+
+  const renderMessageText = (props) => {
+  const { text } = props.currentMessage;
+
+  // Detecta si hay un link en el texto
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return (
+    <Text style={{ color: 'white', fontFamily: 'Poppins-Light', fontSize: 14 }}>
+      {parts.map((part, index) => {
+        if (urlRegex.test(part)) {
+          return (
+            <Text
+              key={index}
+              style={{ color: '#4fa3f7', textDecorationLine: 'underline' }}
+              onPress={() => Linking.openURL(part)}
+            >
+              {part}
+            </Text>
           );
-          if (newMessage.sender.id !== DataUser.id) {
-            patchHttps(`chat/markAsRead/${id}`, {});
-          }
+        } else {
+          return <Text key={index}>{part}</Text>;
         }
-      };
+      })}
+    </Text>
+  );
+};
 
-      socket.on('receiveMessage', handleNewMessage);
 
-      return () => {
-        socket.off('receiveMessage', handleNewMessage);
-      };
+
+  const handleSend = async () => {
+      if (inputMessage.trim() === '' && !selectedFile) return;
+
+    setIsSending(true);
+
+    let filePayload = {};
+
+    // Subir archivo si hay
+    if (selectedFile) {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: selectedFile.uri,
+        type: selectedFile.type || 'application/octet-stream',
+        name: selectedFile.fileName || selectedFile.name || 'archivo',
+      });
+
+      try {
+        const response = await postHttpsStories('chat/upload', formData);
+        filePayload = {
+          fileUrl: response.data.fileUrl,
+          fileName: response.data.fileName,
+          fileType: response.data.fileType,
+        };
+      } catch (err) {
+        console.error('Error al subir archivo:', err);
+        Alert.alert('Error', 'No se pudo enviar el archivo.');
+        setIsSending(false);
+        return;
+      }
     }
-  }, [id, socket, DataUser.id]);
 
-  useEffect(() => {
-    if (socket) {
-      const handleNewMessage = async newMessage => {
-        await fetchMessages();
-      };
+    const messageContent = inputMessage.trim() || '[Archivo adjunto]';
 
-      socket.on('receiveMessage', handleNewMessage);
-      return () => socket.off('receiveMessage', handleNewMessage);
-    }
-  }, [id, socket, fetchMessages]);
+    socket.emit('sendMessage', {
+      receiver: id,
+      content: messageContent,
+      ...filePayload,
+    });
 
-  // Solo enviar el mensaje, el backend decide si envía push o no
-  const handleSend = useCallback(() => {
-    if (inputMessage.trim() === '') return;
+    // ✅ Enviar al backend
 
-    socket.emit('sendMessage', { receiver: id, content: inputMessage });
-
+    // ✅ Limpiar campos
     setInputMessage('');
     setInputHeight(40);
+    setSelectedFile(null);
+    setShowFileModal(false);
+setIsSending(false);
 
-    setTimeout(async () => {
-      await fetchMessages();
-    }, 1000);
-  }, [inputMessage, id, socket, fetchMessages]);
+  }
+
+useEffect(() => {
+  if (!socket || !DataUser?.id || !id) return;
+
+  const handleNewMessage = (msg) => {
+    if (
+      (msg.sender == id && msg.receiver == DataUser.id) ||
+      (msg.sender == DataUser.id && msg.receiver == id)
+    ) {
+      setChatMessages(prev => [
+        {
+          _id: msg.id,
+          text: msg.content,
+          createdAt: new Date(msg.timestamp),
+          fileUrl: msg.fileUrl,
+          fileName: msg.fileName,
+          fileType: msg.fileType,
+          user: {
+            _id: msg.sender,
+            name: '', // opcional
+            avatar: '', // opcional
+          },
+        },
+        ...prev,
+      ]);
+    }
+  };
+
+  socket.on('receiveMessage', handleNewMessage);
+
+  return () => {
+    socket.off('receiveMessage', handleNewMessage);
+  };
+}, [socket, DataUser?.id, id]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -194,8 +418,20 @@ const MessageDetails = ({navigation, route}) => {
           keyboardShouldPersistTaps="always"
           scrollToBottom
           bottomOffset={Platform.OS === 'ios' ? 40 : 0}
+          renderMessageText={renderMessageText}
           renderInputToolbar={() => (
             <View style={styles.inputContainer}>
+              <TouchableOpacity
+                style={{top: 15, left: 5}}
+                onPress={openAttachmentMenu}>
+                <FontAwesome
+                  name="paperclip"
+                  size={24}
+                  color={'white'}
+                  style={{marginHorizontal: 8}}
+                />
+              </TouchableOpacity>
+
               <View style={styles.inputMessageContainer}>
                 <TextInput
                   style={[
@@ -217,108 +453,500 @@ const MessageDetails = ({navigation, route}) => {
                     setInputHeight(event.nativeEvent.contentSize.height)
                   }
                 />
-                <TouchableOpacity onPress={handleSend}>
+                <TouchableOpacity onPress={handleSend} disabled={isSending}>
                   <View style={styles.sendButton}>
                     <FontAwesome name="send" size={22} color={'white'} />
                   </View>
                 </TouchableOpacity>
               </View>
+
+              {/* Modal nativo para confirmar envío */}
+              <Modal visible={showFileModal} transparent animationType="fade">
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}>
+                  <View
+                    style={{
+                      backgroundColor: '#3d3d3d',
+                      padding: 20,
+                      borderRadius: 10,
+                      width: '80%',
+                    }}>
+                    <Text style={{color: 'white', marginBottom: 10}}>
+                      ¿Enviar este archivo?
+                    </Text>
+                    <Text style={{color: 'white'}}>
+                      Nombre: {selectedFile?.name || selectedFile?.fileName}
+                    </Text>
+                    <Text style={{color: 'white'}}>
+                      Tamaño: {Math.round((selectedFile?.size || 0) / 1024)} KB
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'flex-end',
+                        marginTop: 15,
+                      }}>
+                      <TouchableOpacity
+                        onPress={() => setShowFileModal(false)}
+                        style={{marginRight: 20}}>
+                        <Text style={{color: 'red'}}>Cancelar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={handleSend}
+                        disabled={isSending}>
+                        <Text style={{color: 'green'}}>Enviar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
             </View>
           )}
           renderBubble={props => {
             const isSentByCurrentUser =
               props.currentMessage.user._id === DataUser.id;
-            const isMessageRead = props.currentMessage.isRead === 1;
             const story = props.currentMessage.story;
 
-            const isVideo =
+            const isVideoStory =
               story?.img?.endsWith('.mp4') ||
               story?.img?.endsWith('.mov') ||
               story?.img?.includes('video');
 
-            return (
-              <View>
-                {story && (
-                  <>
-                    <Text
-                      style={{
-                        textAlign: 'center',
-                        color: 'white',
-                        fontSize: 10,
+            const fileUrl = props.currentMessage.fileUrl;
+            const fileType = props.currentMessage.fileType;
+            const isThisDownloading =
+              downloadingId === props.currentMessage._id;
+
+            // 👉 Renderizar archivo adjunto si existe
+            if (fileUrl) {
+              const isImage = fileType?.includes('image');
+              const isVideo = fileType?.includes('video');
+
+              return (
+                <View
+                  style={{
+                    backgroundColor: isSentByCurrentUser
+                      ? '#944af5'
+                      : '#3d3d3d',
+                    padding: 8,
+                    borderRadius: 12,
+                    margin: 5,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    alignSelf: isSentByCurrentUser ? 'flex-end' : 'flex-start',
+                    maxWidth: '40%',
+                    minHeight: 10,
+                  }}>
+                  {/* Icono del tipo de archivo */}
+                  <MaterialIcons
+                    name={getFileIcon(fileType)}
+                    size={24}
+                    color="white"
+                    style={{marginRight: 8}}
+                  />
+
+                  {/* Texto Archivo */}
+                  <Text style={{color: 'white', flex: 1}}>Archivo</Text>
+
+                  {/* Botón de preview si es imagen o video */}
+                  {isImage || isVideo ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setPreviewType(isImage ? 'image' : 'video');
+                        setPreviewUrl(fileUrl);
+                        setShowPreviewModal(true);
                       }}>
-                      {isSentByCurrentUser
-                        ? 'Respondiste a su historia'
-                        : 'Respondió a tu historia'}
-                    </Text>
+                      <MaterialIcons
+                        name="remove-red-eye"
+                        size={20}
+                        color="white"
+                      />
+                    </TouchableOpacity>
+                  ) : isThisDownloading ? (
+                    downloadProgress === 1 ? (
+                      <View
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 15,
+                          backgroundColor: 'green',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}>
+                        <MaterialIcons
+                          name="file-download"
+                          size={20}
+                          color="white"
+                        />
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={cancelDownload}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 15,
+                          backgroundColor: 'green',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}>
+                        <MaterialIcons name="close" size={18} color="white" />
+                      </TouchableOpacity>
+                    )
+                  ) : (
                     <TouchableOpacity
                       onPress={() =>
-                        navigation.navigate('ViewStories', {
-                          id: props.currentMessage.user._id,
-                          storyId: story.id,
-                        })
-                      }
-                      style={{
-                        marginTop: 4,
-                        alignSelf: isSentByCurrentUser
-                          ? 'flex-end'
-                          : 'flex-start',
-                      }}>
-                      <View style={{position: 'relative'}}>
-                        <Image
-                          source={{uri: story.img}}
-                          style={{width: 90, height: 130, borderRadius: 12}}
-                        />
-                        {isVideo && (
-                          <View
-                            style={{
-                              position: 'absolute',
-                              top: '40%',
-                              left: '40%',
-                              backgroundColor: 'rgba(0,0,0,0.6)',
-                              borderRadius: 20,
-                              padding: 6,
-                            }}>
-                            <Text style={{color: 'white', fontSize: 18}}>
-                              ▶
-                            </Text>
-                          </View>
-                        )}
-                      </View>
+                        downloadFile(
+                          fileUrl,
+                          'Archivo',
+                          props.currentMessage._id,
+                        )
+                      }>
+                      <MaterialIcons
+                        name="file-download"
+                        size={20}
+                        color="white"
+                      />
                     </TouchableOpacity>
-                  </>
-                )}
-                <Bubble
-                  {...props}
-                  wrapperStyle={{
-                    right: {
-                      backgroundColor: '#944af5',
-                      padding: 8,
-                      borderRadius: 20,
-                    },
-                    left: {
-                      backgroundColor: '#3d3d3d',
-                      padding: 8,
-                      borderRadius: 20,
-                    },
-                  }}
-                  textStyle={{
-                    right: {
+                  )}
+                </View>
+              );
+            }
+
+            // 👉 Renderizar historia si existe
+            if (story) {
+              return (
+                <View>
+                  <Text
+                    style={{
+                      textAlign: 'center',
                       color: 'white',
-                      fontFamily: 'Poppins-Light',
-                      fontSize: 14,
-                    },
-                    left: {
-                      color: 'white',
-                      fontFamily: 'Poppins-Light',
-                      fontSize: 14,
-                    },
-                  }}
-                />
-              </View>
+                      fontSize: 10,
+                    }}>
+                    {isSentByCurrentUser
+                      ? 'Respondiste a su historia'
+                      : 'Respondió a tu historia'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation.navigate('ViewStories', {
+                        id: props.currentMessage.user._id,
+                        storyId: story.id,
+                      })
+                    }
+                    style={{
+                      marginTop: 4,
+                      alignSelf: isSentByCurrentUser
+                        ? 'flex-end'
+                        : 'flex-start',
+                    }}>
+                    <View style={{position: 'relative'}}>
+                      <Image
+                        source={{uri: story.img}}
+                        style={{width: 90, height: 130, borderRadius: 12}}
+                      />
+                      {isVideoStory && (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: '40%',
+                            left: '40%',
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            borderRadius: 20,
+                            padding: 6,
+                          }}>
+                          <Text style={{color: 'white', fontSize: 18}}>▶</Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
+            // 👉 Renderizar mensaje normal
+            return (
+              <Bubble
+                {...props}
+                wrapperStyle={{
+                  right: {
+                    backgroundColor: '#944af5',
+                    padding: 8,
+                    borderRadius: 20,
+                  },
+                  left: {
+                    backgroundColor: '#3d3d3d',
+                    padding: 8,
+                    borderRadius: 20,
+                  },
+                }}
+                textStyle={{
+                  right: {
+                    color: 'white',
+                    fontFamily: 'Poppins-Light',
+                    fontSize: 14,
+                  },
+                  left: {
+                    color: 'white',
+                    fontFamily: 'Poppins-Light',
+                    fontSize: 14,
+                  },
+                }}
+              />
             );
           }}
         />
       </View>
+      <Modal
+        visible={showPreviewModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPreviewModal(false)}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'black',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}>
+          <TouchableOpacity
+            style={{position: 'absolute', top: 40, right: 20, zIndex: 10}}
+            onPress={() => setShowPreviewModal(false)}>
+            <MaterialIcons name="close" size={30} color="white" />
+          </TouchableOpacity>
+
+          {previewType === 'image' && (
+            <FastImage
+              source={{uri: previewUrl}}
+              style={{width: '90%', height: '70%'}}
+              resizeMode={FastImage.resizeMode.contain}
+            />
+          )}
+
+          {previewType === 'video' && (
+            <VideoPost
+              videoUrl={previewUrl}
+              isVisible={true}
+              style={{width: ITEM_WIDTH, height: FIXED_HEIGHT}}
+              shouldPause={false}
+            />
+          )}
+        </View>
+      </Modal>
+      <Modal visible={showAttachmentModal} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: 'rgba(0,0,0,0.6)',
+          }}>
+          <View
+            style={{
+              backgroundColor: '#222',
+              padding: 20,
+              borderRadius: 10,
+              width: '80%',
+            }}>
+            <Text
+              style={{
+                color: 'white',
+                fontSize: 16,
+                fontWeight: 'bold',
+                marginBottom: 10,
+              }}>
+              Selecciona una opción
+            </Text>
+
+            {/* Cámara (foto) */}
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginVertical: 8,
+              }}
+              onPress={async () => {
+                setShowAttachmentModal(false);
+                const granted = await requestCameraPermission();
+                if (!granted) return;
+
+                launchCamera({mediaType: 'photo'}, async response => {
+                  if (response.assets?.length) {
+                    const asset = response.assets[0];
+
+                    try {
+                      const stats = await RNFS.stat(asset.uri);
+                      const sizeBytes = stats.size;
+
+                      const formatFileSize = bytes => {
+                        if (!bytes || isNaN(bytes)) return '0 KB';
+
+                        const kb = bytes / 1024;
+                        if (kb < 1024) {
+                          return `${kb.toFixed(1)} KB`;
+                        }
+
+                        const mb = kb / 1024;
+                        return `${mb.toFixed(2)} MB`;
+                      };
+
+                      const fileWithSize = {
+                        ...asset,
+                        size: sizeBytes,
+                        formattedSize: formatFileSize(sizeBytes),
+                      };
+
+                      setSelectedFile(fileWithSize);
+                      setShowFileModal(true);
+                    } catch (err) {
+                      console.warn(
+                        'No se pudo obtener el tamaño de la imagen:',
+                        err,
+                      );
+                    }
+                  }
+                });
+              }}>
+              <MaterialIcons
+                name="photo-camera"
+                size={24}
+                color="white"
+                style={{marginRight: 10}}
+              />
+              <Text style={{color: 'white', fontSize: 16}}>Cámara (foto)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginVertical: 8,
+              }}
+              onPress={async () => {
+                setShowAttachmentModal(false);
+                const granted = await requestCameraPermission();
+                if (!granted) return;
+
+                launchCamera(
+                  {mediaType: 'video', videoQuality: 'high'},
+                  async response => {
+                    if (response.assets?.length) {
+                      const asset = response.assets[0];
+
+                      try {
+                        const stats = await RNFS.stat(asset.uri);
+                        const sizeBytes = stats.size;
+
+                        const formatFileSize = bytes => {
+                          const kb = bytes / 1024;
+                          if (kb < 1024) return `${kb.toFixed(1)} KB`;
+                          return `${(kb / 1024).toFixed(2)} MB`;
+                        };
+
+                        const fileWithSize = {
+                          ...asset,
+                          size: sizeBytes,
+                          formattedSize: formatFileSize(sizeBytes),
+                        };
+
+                        setSelectedFile(fileWithSize);
+                        setShowFileModal(true);
+                      } catch (err) {
+                        console.warn(
+                          'No se pudo obtener el tamaño del video:',
+                          err,
+                        );
+                      }
+                    }
+                  },
+                );
+              }}>
+              <MaterialIcons
+                name="videocam"
+                size={24}
+                color="white"
+                style={{marginRight: 10}}
+              />
+              <Text style={{color: 'white', fontSize: 16}}>Grabar video</Text>
+            </TouchableOpacity>
+
+            {/* Galería */}
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginVertical: 8,
+              }}
+              onPress={() => {
+                setShowAttachmentModal(false);
+                launchImageLibrary({mediaType: 'photo'}, response => {
+                  if (response.assets?.length) {
+                    setSelectedFile(response.assets[0]);
+                    setShowFileModal(true);
+                  }
+                });
+              }}>
+              <MaterialIcons
+                name="photo-library"
+                size={24}
+                color="white"
+                style={{marginRight: 10}}
+              />
+              <Text style={{color: 'white', fontSize: 16}}>Galería</Text>
+            </TouchableOpacity>
+
+            {/* Archivos */}
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginVertical: 8,
+              }}
+              onPress={async () => {
+                setShowAttachmentModal(false);
+                try {
+                  const [res] = await pick({mode: 'open', type: '*/*'});
+                  if (res?.uri && res?.name) {
+                    const destPath = `${RNFS.DownloadDirectoryPath}/${res.name}`;
+                    const fileContents = await RNFS.readFile(res.uri, 'base64');
+                    await RNFS.writeFile(destPath, fileContents, 'base64');
+                    setSelectedFile({
+                      uri: res.uri,
+                      type: res.type,
+                      fileName: res.name,
+                      size: res.size,
+                    });
+                    setShowFileModal(true);
+                  }
+                } catch (err) {
+                  if (err?.code !== 'DOCUMENT_PICKER_CANCELED') {
+                    Alert.alert('Error', 'No se pudo abrir el archivo.');
+                  }
+                }
+              }}>
+              <MaterialIcons
+                name="insert-drive-file"
+                size={24}
+                color="white"
+                style={{marginRight: 10}}
+              />
+              <Text style={{color: 'white', fontSize: 16}}>Archivos</Text>
+            </TouchableOpacity>
+
+            {/* Cancelar */}
+            <TouchableOpacity
+              onPress={() => setShowAttachmentModal(false)}
+              style={{marginTop: 10}}>
+              <Text style={{color: 'red', textAlign: 'right'}}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };

@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator } fr
 import React, { useState } from 'react'
 import { COLORS, SIZES } from '../constants'
 
-const DEFAULT_AVATAR = 'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png'
+const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png'
 
 const FollowerCard = ({ onPress, avatar, name }) => {
   const [imgError, setImgError] = useState(false)

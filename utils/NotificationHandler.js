@@ -12,7 +12,7 @@ const onNotificationClick = async data => {
   } catch (e) {
     extraData = {};
   }
-  console.log(extraData);
+  
   const {type, ...params} = data;
 
   switch (type) {
@@ -26,8 +26,14 @@ const onNotificationClick = async data => {
     case 'feed_notification':
       navigate('Post', {id: extraData.id});
       break;
+         case 'mention':
+      navigate('Post', {id: extraData.feedId});
+      break;
     case 'reaction_feed':
       push('Post', {id: extraData.feedId});
+      break;
+       case 'mention_event':
+      push('EventDetails', {id: extraData.eventId});
       break;
     case 'follow_user':
       navigate('FriendTimeline', {id: extraData.follower.id});
@@ -104,24 +110,24 @@ export const setupNotificationHandlers = () => {
     .getInitialNotification()
     .then(remoteMessage => {
       if (remoteMessage?.data) {
-        console.log('🔄 App abierta desde estado cerrado:', remoteMessage);
+      
         onNotificationClick(remoteMessage.data);
       }
     });
 
   // Mensaje en primer plano: mostrar notificación manualmente
   messaging().onMessage(async remoteMessage => {
-    console.log('📩 Primer plano: mensaje recibido:', remoteMessage);
+  
     await showLocalNotification(remoteMessage);
   });
 
   // Mensaje recibido en segundo plano (con app abierta o minimizada)
   messaging().setBackgroundMessageHandler(async remoteMessage => {
-    console.log('📥 Segundo plano: mensaje recibido:', remoteMessage);
+   
 
     // Evitar duplicar si FCM ya mostró la notificación (cuando viene con "notification" en el payload)
     if (remoteMessage.notification) {
-      console.log('🛑 FCM ya mostró notificación. No se duplica.');
+      
       return;
     }
 
@@ -131,7 +137,7 @@ export const setupNotificationHandlers = () => {
   // Usuario toca notificación mientras app está en primer plano
   notifee.onForegroundEvent(({type, detail}) => {
     if (type === EventType.PRESS) {
-      console.log('🖱️ Foreground: usuario tocó notificación');
+      
       onNotificationClick(detail.notification?.data);
     }
   });
@@ -140,7 +146,7 @@ export const setupNotificationHandlers = () => {
 // 🧠 Usuario toca notificación con la app cerrada (background event)
 notifee.onBackgroundEvent(async ({type, detail}) => {
   if (type === EventType.PRESS) {
-    console.log('🖱️ Background: usuario tocó notificación');
+
     await onNotificationClick(detail.notification?.data);
   }
 });

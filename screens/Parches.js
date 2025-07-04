@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import {useRoute, useNavigation, useFocusEffect} from '@react-navigation/native';
-import {getHttps, postHttps} from '../api/axios';
+import {deleteHttps, getHttps, postHttps} from '../api/axios';
 import Tab from '../components/Tab';
 import Header from '../components/Header';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -53,10 +53,12 @@ const Parches = () => {
           : `parches/parcheprivado?page=${page}&limit=${limit}`;
 
       const response = await getHttps(endpoint);
+      
       setParches(response.data.parches);
+
     } catch (error) {
       console.error('Error trayendo parches:', error);
-      Alert.alert('Error', 'No se pudieron cargar los parches');
+    
     } finally {
       setLoading(false);
     }
@@ -102,9 +104,10 @@ const Parches = () => {
   };
 
   const deleteParche = async parcheId => {
+    
     try {
-      // Aquí haces el delete o postHttps correspondiente
-      Alert.alert('Eliminado', 'El parche se eliminó correctamente');
+       
+      const borrarParche = await deleteHttps(`parches/${parcheId}`)
       fetchParches();
     } catch (error) {
       console.error(error);
@@ -288,6 +291,8 @@ const Parches = () => {
           {renderParches()}
         </ScrollView>
       )}
+
+     <View style={{margin:50}}/>
 
       <Tab />
     </View>

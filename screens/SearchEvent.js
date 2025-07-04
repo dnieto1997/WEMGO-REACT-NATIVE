@@ -9,7 +9,7 @@ import {
   StyleSheet,
   FlatList,
   SafeAreaView,
-  Modal
+  Modal,
 } from 'react-native';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -18,7 +18,9 @@ import HeaderwithLogoandIcons from '../components/Headerwithlogoandicons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
-
+import DateTimePicker from '@react-native-community/datetimepicker';
+import RNPickerSelect from 'react-native-picker-select';
+import MonthlyCalendar from '../components/MonthlyCalendar';
 
 const groupEventsByDate = events => {
   return events.reduce((acc, event) => {
@@ -99,43 +101,67 @@ const SearchEvent = () => {
   const [DataUser, setDataUser] = useState({});
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [eventos, setEvents] = useState([]);
+  const [selectedType, setSelectedType] = useState('');
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
 
-    const loadUserData = async () => {
-      try {
-        const data = await AsyncStorage.getItem('userData');
-        if (data) {
-          const parsedData = JSON.parse(data);
-          setDataUser(parsedData);
-         
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
+  const eventTypes = [
+    {label: 'Películas', value: 'movie'},
+    {label: 'Festival', value: 'festival'},
+    {label: 'Comida', value: 'food'},
+    {label: 'Música', value: 'music'},
+    {label: 'Teatro', value: 'theather'},
+    {label: 'Deporte', value: 'sport'},
+    {label: 'Juegos', value: 'games'},
+    {label: 'Turismo', value: 'touring'},
+    {label: 'Fiesta', value: 'party'},
+    {label: 'Playa', value: 'beach'},
+    {label: 'Cultura', value: 'culture'},
+    {label: 'Networking', value: 'internet'},
+  ];
+  const loadUserData = async () => {
+    try {
+      const data = await AsyncStorage.getItem('userData');
+      if (data) {
+        const parsedData = JSON.parse(data);
+        setDataUser(parsedData);
       }
-    };
-
-      useEffect(() => {
-            loadUserData()
-          }, [])
-
-  const handleSearch = async (text) => {
-    setQuery(text);
-    if (text.length > 2) {
-      try {
-        const response = await getHttps(`event/search/${text}`);
-        setEvents(response.data);
-        
-      } catch (error) {
-        console.error('Error fetching events:', error);
-      }
-    } else {
-      setEventsByDate({});
+    } catch (error) {
+      console.error('Error fetching user data:', error);
     }
   };
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const handleSearch = async text => {
+    setQuery(text);
+    try {
+      const params = new URLSearchParams();
+      if (text.length > 2) params.append('query', text);
+      if (selectedType) params.append('type', selectedType); // Corregido aquí
+      if (startDate) params.append('startDate', startDate.toISOString());
+      if (endDate) params.append('endDate', endDate.toISOString());
+
+      const response = await getHttps(
+        `event/search/filters?${params.toString()}`,
+      );
+
+      setEvents(response.data);
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    }
+  };
+
 
   const fetchEvents = async () => {
     try {
       const response = await getHttps('event/searchbyinterest');
+
       const grouped = groupEventsByDate(response.data);
       setEventsByDate(grouped);
     } catch (error) {
@@ -156,60 +182,36 @@ const SearchEvent = () => {
     }
   };
 
-    useFocusEffect(
-      useCallback(() => {
-        fetchEvents();
-        loadUserData();
-      }, []),
-    );
-
-    const mostrarModal =()=>{
-      setSearchModalVisible(true)
-      setQuery('')
-      setEvents([])
-    }
-
-    const cerrarModal =()=>{
-      setSearchModalVisible(false)
-      setQuery('')
-      setEvents([])
+    const handleRefreshHeader = () => {
+ 
+};
+  useFocusEffect(
+    useCallback(() => {
       fetchEvents();
-    }
+      loadUserData();
+      handleRefreshHeader();
+  
+    }, []),
+  );
+
+
+
+  const mostrarModal = () => {
+    setSearchModalVisible(true);
+    setQuery('');
+    setEvents([]);
+    setSelectedType('');
+    setStartDate(null);
+    setEndDate(null);
+  };
+  const cerrarModal = () => {
+    setSearchModalVisible(false);
+    setQuery('');
+    setEvents([]);
+    fetchEvents();
+  };
   const renderCalendar = () => (
-    <View style={styles.calendarContainer}>
-      <View style={styles.calendarHeader}>
-        {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-          <Text key={day} style={styles.calendarHeaderText}>
-            {day}
-          </Text>
-        ))}
-      </View>
-      <View style={styles.calendarGrid}>
-        {calendarDates.map(({day, iso, isCurrentMonth}) => (
-          <View
-            key={iso}
-            style={[styles.calendarCell, !isCurrentMonth && {opacity: 0.3}]}>
-            <Text style={styles.calendarDay}>{day}</Text>
-            {eventsByDate[iso]?.slice(0, 2).map(event => (
-              <TouchableOpacity
-                key={event.id}
-                onPress={() =>
-                  navigation.navigate('EventDetails', {id: event.id})
-                }>
-                <Text numberOfLines={1} style={styles.eventDot}>
-                  • {event.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-            {eventsByDate[iso]?.length > 2 && (
-              <Text style={styles.moreEventsText}>
-                +{eventsByDate[iso].length - 2} más
-              </Text>
-            )}
-          </View>
-        ))}
-      </View>
-    </View>
+    <MonthlyCalendar events={Object.values(eventsByDate).flat()} />
   );
 
   const renderWeekEvents = () => (
@@ -218,12 +220,16 @@ const SearchEvent = () => {
         {calendarDates.map(({label, day, iso}) => (
           <View key={iso} style={styles.eventRow}>
             {/* Fecha del día (lado izquierdo con fondo especial) */}
-            <View style={[styles.dateBox, iso === '2024-04-22' && styles.gradientDateBox]}>
+            <View
+              style={[
+                styles.dateBox,
+                iso === '2024-04-22' && styles.gradientDateBox,
+              ]}>
               <Text style={styles.dayText}>{day}</Text>
               <Text style={styles.monthText}>{label.split(' ')[2]}</Text>
             </View>
-  
-             <View style={{margin:9}}/>
+
+            <View style={{margin: 9}} />
             <View style={styles.cardContainer}>
               {eventsByDate[iso]?.length ? (
                 eventsByDate[iso].map(event => (
@@ -239,15 +245,14 @@ const SearchEvent = () => {
             </View>
           </View>
         ))}
-        <View style={{margin:35}}/>
+        <View style={{margin: 35}} />
       </ScrollView>
-      
     </SafeAreaView>
   );
   return (
     <View style={{flex: 1, backgroundColor: '#000'}}>
       <View style={{marginTop: 15}} />
-      <HeaderwithLogoandIcons />
+      <HeaderwithLogoandIcons onRefresh={handleRefreshHeader}/>
 
       <View style={{marginTop: 30}} />
 
@@ -277,85 +282,193 @@ const SearchEvent = () => {
         </TouchableOpacity>
 
         <View style={styles.icons}>
-          <TouchableOpacity style={styles.iconButton}  onPress={() => mostrarModal() }>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => mostrarModal()}>
             <Ionicons name="search-outline" size={25} color="#944af5" />
           </TouchableOpacity>
-     {/*      {DataUser.role !== 'USER' && ( 
+          {/*      {DataUser.role !== 'USER' && ( 
                <TouchableOpacity style={styles.iconButton} onPress={() => { }}>
                <Ionicons name="add-outline" size={25} color="#944af5" />
              </TouchableOpacity>
           )} */}
-       
         </View>
       </View>
-      <View style={{marginEnd:10}}>
-      <Text style={styles.textEvent}>¡Te podrían interesar estos eventos!</Text>
-      </View>
-            
-     <Modal
-  animationType="slide"
-  transparent={true}
-  visible={searchModalVisible}
-  onRequestClose={() => setSearchModalVisible(false)}
->
-  <View style={styles.modalOverlay}>
-    <View style={styles.modalContent}>
-      
-      {/* Input con ícono de búsqueda */}
-      <View style={styles.searchContainer}>
-        <Icon name="search" size={20} color="#aaa" style={styles.searchIcon} />
-        <TextInput
-          style={styles.input}
-          placeholder="Buscar eventos..."
-          placeholderTextColor="#aaa"
-          value={query}
-          onChangeText={handleSearch}
-          autoFocus
-        />
+      <View style={{marginEnd: 10}}>
+        <Text style={styles.textEvent}>
+          ¡Te podrían interesar estos eventos!
+        </Text>
       </View>
 
-      {/* Resultados */}
-      <ScrollView style={{ marginTop: 16 }}>
-        {eventos
-          .filter((evento) =>
-            evento.name.toLowerCase().includes(query.toLowerCase())
-          )
-          .map((evento, index) => {
-            const images = JSON.parse(evento.img || '[]');
-            const start = new Date(evento.initial_date).toLocaleDateString();
-            const end = new Date(evento.final_date).toLocaleDateString();
-
-            return (
-              <TouchableOpacity
-                key={index}
-                style={styles.resultCard}
-                onPress={() => {
-                  setSearchModalVisible(false);
-                   navigation.navigate('EventDetails', {id: evento.id})
-                }}
-              >
-                <Image
-                  source={{ uri: images[0] }}
-                  style={styles.resultImage}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={searchModalVisible}
+        onRequestClose={() => setSearchModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Input de búsqueda con ícono */}
+            <View style={[styles.searchContainer, {marginBottom: 12}]}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#222',
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                }}>
+                <Icon
+                  name="search"
+                  size={20}
+                  color="#aaa"
+                  style={{marginRight: 8}}
                 />
-                <View style={styles.resultInfo}>
-                  <Text style={styles.resultTitle}>{evento.name}</Text>
-                  <Text style={styles.resultLocation}>{evento.city}, {evento.country}</Text>
-                  <Text style={styles.resultDate}>{start} - {end}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-      </ScrollView>
+                <TextInput
+                  style={[styles.input, {flex: 1, color: '#fff'}]}
+                  placeholder="Buscar eventos..."
+                  placeholderTextColor="#aaa"
+                  value={query}
+                  onChangeText={handleSearch}
+                  autoFocus
+                />
+              </View>
+            </View>
 
-      {/* Botón cerrar */}
-      <TouchableOpacity onPress={cerrarModal} style={styles.closeButton}>
-        <Text style={styles.closeText}>Cerrar</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-</Modal>
-               
+            {/* Select tipo de evento */}
+            <View style={{marginBottom: 12}}>
+              <RNPickerSelect
+                onValueChange={value => setSelectedType(value)}
+                value={selectedType}
+                placeholder={{label: 'Seleccionar tipo de evento', value: null}}
+                items={eventTypes}
+                style={{
+                  inputAndroid: {
+                    color: '#fff',
+                    backgroundColor: '#333',
+                    padding: 12,
+                    borderRadius: 10,
+                  },
+                  inputIOS: {
+                    color: '#fff',
+                    backgroundColor: '#333',
+                    padding: 12,
+                    borderRadius: 10,
+                  },
+                }}
+              />
+            </View>
+
+            {/* Filtros por fecha */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                marginBottom: 16,
+              }}>
+              <TouchableOpacity
+                onPress={() => setShowStartPicker(true)}
+                style={{
+                  flex: 1,
+                  marginRight: 5,
+                  backgroundColor: '#333',
+                  padding: 10,
+                  borderRadius: 10,
+                }}>
+                <Text style={{color: '#fff', textAlign: 'center'}}>
+                  Desde:{' '}
+                  {startDate ? startDate.toLocaleDateString() : 'Seleccionar'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setShowEndPicker(true)}
+                style={{
+                  flex: 1,
+                  marginLeft: 5,
+                  backgroundColor: '#333',
+                  padding: 10,
+                  borderRadius: 10,
+                }}>
+                <Text style={{color: '#fff', textAlign: 'center'}}>
+                  Hasta:{' '}
+                  {endDate ? endDate.toLocaleDateString() : 'Seleccionar'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* DatePickers */}
+            {showStartPicker && (
+              <DateTimePicker
+                value={startDate || new Date()}
+                mode="date"
+                display="default"
+                onChange={(event, date) => {
+                  setShowStartPicker(false);
+                  if (date) setStartDate(date);
+                }}
+              />
+            )}
+            {showEndPicker && (
+              <DateTimePicker
+                value={endDate || new Date()}
+                mode="date"
+                display="default"
+                onChange={(event, date) => {
+                  setShowEndPicker(false);
+                  if (date) setEndDate(date);
+                }}
+              />
+            )}
+
+            {/* Resultados */}
+            <ScrollView style={{marginTop: 10}}>
+              {eventos
+                .filter(evento =>
+                  query
+                    ? evento.name.toLowerCase().includes(query.toLowerCase())
+                    : true,
+                )
+                .map((evento, index) => {
+                  const images = JSON.parse(evento.img || '[]');
+                  const start = new Date(
+                    evento.initial_date,
+                  ).toLocaleDateString();
+                  const end = new Date(evento.final_date).toLocaleDateString();
+
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.resultCard}
+                      onPress={() => {
+                        setSearchModalVisible(false);
+                        navigation.navigate('EventDetails', {id: evento.id});
+                      }}>
+                      <Image
+                        source={{uri: images[0]}}
+                        style={styles.resultImage}
+                      />
+                      <View style={styles.resultInfo}>
+                        <Text style={styles.resultTitle}>{evento.name}</Text>
+                        <Text style={styles.resultLocation}>
+                          {evento.city}, {evento.country}
+                        </Text>
+                        <Text style={styles.resultDate}>
+                          {start} - {end}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+
+            {/* Botón cerrar */}
+            <TouchableOpacity onPress={cerrarModal} style={styles.closeButton}>
+              <Text style={styles.closeText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {viewMode === 'month' ? renderCalendar() : renderWeekEvents()}
     </View>
   );
@@ -370,12 +483,12 @@ const styles = StyleSheet.create({
   icons: {
     flexDirection: 'row',
   },
-  textEvent:{
- color:"white",
-  fontSize:20,
-  fontWeight:"bold",
-  fontFamily:"Poppins-Bold",
-  textAlign:"center"
+  textEvent: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+    fontFamily: 'Poppins-Bold',
+    textAlign: 'center',
   },
   iconButton: {
     backgroundColor: 'white',
@@ -442,7 +555,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  
+
   dateBox: {
     width: 90,
     height: 80,
@@ -455,25 +568,25 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#3a3a3a',
   },
-  
+
   gradientDateBox: {
     backgroundColor: 'linear-gradient(45deg, #b952ff, #5ac8fa)', // para gradient real necesitarías una View de `react-native-linear-gradient`
     // esto es solo visual para ver cómo sería, reemplaza por el componente si usas gradient real
   },
-  
+
   dayText: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    fontFamily:"Poppins-Bold"
+    fontFamily: 'Poppins-Bold',
   },
-  
+
   monthText: {
     fontSize: 12,
     color: '#ccc',
-     fontFamily:"Poppins-Bold"
+    fontFamily: 'Poppins-Bold',
   },
-  
+
   cardContainer: {
     flex: 1,
     backgroundColor: '#2a2a2a',
@@ -481,7 +594,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 12,
     padding: 12,
     marginLeft: -1,
-    borderRadius:20
+    borderRadius: 20,
   },
   tabButton: {
     paddingVertical: 8,
@@ -495,8 +608,8 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: '#ccc',
-    fontWeight:"bold",
-    fontFamily:"Poppins-Bold"
+    fontWeight: 'bold',
+    fontFamily: 'Poppins-Bold',
   },
   tabTextActive: {
     color: '#fff',
@@ -543,7 +656,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 6,
     paddingHorizontal: 10,
-    marginTop:30
+    marginTop: 30,
   },
   calendarHeaderText: {
     flex: 1,
@@ -605,16 +718,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
-    padding: 16,
+    padding: 20,
   },
+
   modalContent: {
     backgroundColor: '#1c1c1c',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
+    width: '100%',
     maxHeight: '90%',
     shadowColor: '#000',
+    shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowRadius: 6,
     elevation: 10,
   },
   searchContainer: {

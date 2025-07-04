@@ -1,27 +1,19 @@
-import { View, Text, TouchableOpacity, StyleSheet, Image, Alert, Modal, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, TouchableWithoutFeedback } from 'react-native';
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SIZES, FONTS, icons } from '../constants';
+import { SIZES, icons } from '../constants';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { validateInput } from '../utils/actions/formActions';
 import { reducer } from '../utils/reducers/formReducers';
-import { postHttps } from '../api/axios'; // Asegúrate de tener configurada esta función para solicitudes HTTP.
+import { postHttps } from '../api/axios';
 import Header from '../components/Header';
 
-const isTestMode = false; // Cambia esto a `true` solo para pruebas
-
 const initialState = {
-  inputValues: {
-    email: '', 
-  },
-  inputValidities: {
-    email: false,
-  },
+  inputValues: { email: '' },
+  inputValidities: { email: false },
   formIsValid: false,
 };
-
-
 
 const ForgetPassword = ({ navigation }) => {
   const [error, setError] = useState();
@@ -29,45 +21,32 @@ const ForgetPassword = ({ navigation }) => {
   const [formState, dispatchFormState] = useReducer(reducer, initialState);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const inputChangedHandler = useCallback(
-    (inputId, inputValue) => {
-      const result = validateInput(inputId, inputValue); // Validar el valor ingresado
-      dispatchFormState({ inputId, validationResult: result, inputValue });
-  
-    },
-    [dispatchFormState]
-
- 
-  );
+  const inputChangedHandler = useCallback((inputId, inputValue) => {
+    const result = validateInput(inputId, inputValue);
+    dispatchFormState({ inputId, validationResult: result, inputValue });
+  }, []);
 
   useEffect(() => {
     if (error) {
-      Alert.alert('An error occurred', error);
+      alert('Ocurrió un error', error);
     }
   }, [error]);
 
   const sendResetEmail = async () => {
     const email = formState.inputValues.email;
-
     if (!formState.formIsValid) {
-      Alert.alert('Invalid Input', 'Please provide a valid email address.');
+      alert('Correo inválido', 'Por favor, ingresa un correo electrónico válido.');
       return;
     }
 
     setIsLoading(true);
-
     try {
       const response = await postHttps('mail/send-mail', { to: email });
-
-
-      if (response.status!=201) {
-        throw new Error('Failed to send reset email. Please try again.');
-      }
-
-      setModalVisible(true); // Mostrar modal de éxito
+      if (response.status != 201) throw new Error('No se pudo enviar el correo. Intenta nuevamente.');
+      setModalVisible(true);
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Something went wrong.');
+      setError(err.message || 'Algo salió mal.');
     } finally {
       setIsLoading(false);
     }
@@ -79,22 +58,22 @@ const ForgetPassword = ({ navigation }) => {
         <View style={styles.modalContainer}>
           <View style={styles.modalSubContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalHeaderText}>Password Reset Email Sent</Text>
+              <Text style={styles.modalHeaderText}>¡Correo enviado!</Text>
             </View>
             <View style={{ alignItems: 'center' }}>
               <Text style={styles.modalBodyText}>
-                An email has been sent to you. Follow the directions in the email to reset your password.
+                Te hemos enviado un correo para que restablezcas tu contraseña.
               </Text>
               <TouchableOpacity
                 onPress={() => {
                   setModalVisible(false);
                   navigation.navigate('ForgetPasswordEmailCode', {
-                    email:formState.inputValues.email, // Pasa el email como parámetro
+                    email: formState.inputValues.email,
                   });
                 }}
                 style={styles.modalButton}
               >
-                <Text style={styles.modalButtonText}>OK</Text>
+                <Text style={styles.modalButtonText}>Continuar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -106,22 +85,20 @@ const ForgetPassword = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.area}>
       <View style={styles.container}>
-        
-          <Header title={"Restablecer Contraseña"}/>
-       
+        <Header title="Restablecer Contraseña" />
         <View style={styles.formContainer}>
           <Text style={styles.title}>
-           Enviaremos un correo electrónico a la dirección que registraste para recuperar tu contraseña
+            Enviaremos un correo electrónico a la dirección que registraste para recuperar tu contraseña.
           </Text>
           <Input
             id="email"
-            value={formState.inputValues.email} // Asegurarte de pasar el valor actual
-            onChangeText={(text) => inputChangedHandler('email', text)} // Actualiza el valor cuando cambia
+            value={formState.inputValues.email}
+            onChangeText={(text) => inputChangedHandler('email', text)}
             errorText={
               !formState.inputValidities['email'] && 'Por favor, ingresa una dirección de correo válida.'
             }
             placeholder="example@gmail.com"
-            placeholderTextColor={"white"}
+            placeholderTextColor="#ccc"
             keyboardType="email-address"
             icon={icons.email}
           />
@@ -136,36 +113,15 @@ const ForgetPassword = ({ navigation }) => {
 const styles = StyleSheet.create({
   area: {
     flex: 1,
-    backgroundColor: "black",
+    backgroundColor: '#000',
   },
   container: {
     flex: 1,
-    backgroundColor:  "black",
+    backgroundColor: '#000',
     padding: 16,
   },
- 
-  headerIconContainer: {
-    height: 40,
-    width: 40,
-    borderRadius: 999,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  back: {
-    height: 16,
-    width: 16,
-    tintColor: COLORS.black,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontFamily: 'Roboto Black',
-    position: 'absolute',
-    right: (SIZES.width - 32) / 2 - 64,
-    color: 'black',
-  },
   formContainer: {
-    backgroundColor: "black",
+    backgroundColor: '#111',
     borderRadius: 20,
     marginVertical: 32,
     padding: 22,
@@ -174,50 +130,54 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Poppins-Bold',
     textAlign: 'center',
-    color: "white",
+    color: '#fff',
     marginBottom: 16,
   },
   modalContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   modalSubContainer: {
-    height: 220,
+    height: 230,
     width: SIZES.width * 0.8,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
   },
   modalHeader: {
-    height: 50,
-    backgroundColor: COLORS.primary,
+    height: 60,
+    backgroundColor: '#944af5',
     alignItems: 'center',
     justifyContent: 'center',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   modalHeaderText: {
     fontFamily: 'Poppins-Bold',
-    color: COLORS.white,
-    fontSize: 20,
+    color: '#fff',
+    fontSize: 18,
   },
   modalBodyText: {
-    ...FONTS.body3,
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    color: '#ccc',
     textAlign: 'center',
-    marginVertical: 22,
+    marginVertical: 20,
     marginHorizontal: 22,
   },
   modalButton: {
-    height: 42,
-    width: 188,
+    height: 44,
+    width: 180,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: 20,
+    backgroundColor: '#944af5',
+    borderRadius: 25,
   },
   modalButtonText: {
     fontSize: 16,
-    fontFamily: 'Roboto Medium',
-    color: COLORS.white,
+    fontFamily: 'Poppins-Bold',
+    color: '#fff',
   },
 });
 

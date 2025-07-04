@@ -1,3 +1,4 @@
+// AddStory.js
 import React, { useState } from 'react';
 import {
   View,
@@ -8,6 +9,7 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
+  Image,
   Platform,
 } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
@@ -15,14 +17,16 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { showEditor } from 'react-native-video-trim';
 import { postHttpsStories } from '../api/axios';
+import Video from 'react-native-video';
+import { useNavigation } from '@react-navigation/native';
 
-
-const AddStory = ({ isVisible, navigation }) => {
+const AddStory = ({ isVisible}) => {
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [caption, setCaption] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [trimmedVideo, setTrimmedVideo] = useState(null);
-  const [audioUri, setAudioUri] = useState(null);
+
+  const navigation=useNavigation()
 
   const requestPermission = async (type) => {
     let permission;
@@ -36,12 +40,21 @@ const AddStory = ({ isVisible, navigation }) => {
         ios: PERMISSIONS.IOS.PHOTO_LIBRARY,
         android:
           Platform.Version >= 33
-            ? PERMISSIONS.ANDROID.READ_MEDIA_VIDEO
+            ? [
+                PERMISSIONS.ANDROID.READ_MEDIA_IMAGES,
+                PERMISSIONS.ANDROID.READ_MEDIA_VIDEO,
+              ]
             : PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE,
       });
     }
-    const result = await request(permission);
-    return result === RESULTS.GRANTED;
+
+    if (Array.isArray(permission)) {
+      const results = await Promise.all(permission.map(p => request(p)));
+      return results.every(r => r === RESULTS.GRANTED);
+    } else {
+      const result = await request(permission);
+      return result === RESULTS.GRANTED;
+    }
   };
 
   const trimVideoWithEditor = async (videoUri) => {
@@ -52,25 +65,21 @@ const AddStory = ({ isVisible, navigation }) => {
           maxDuration: 30,
           saveToPhoto: false,
           openShareSheetOnFinish: false,
-          openDocumentsOnFinish: false,
           closeWhenFinish: true,
         },
         (eventName, payload) => {
           if (eventName === 'onFinishTrimming' && payload?.output) {
-            console.log('🎞️ Video recortado:', payload.output);
             setTrimmedVideo({ uri: payload.output, type: 'video/mp4' });
           }
           if (eventName === 'onCancelTrimming') {
-            console.log('⛔ Recorte cancelado');
+            setSelectedMedia(null);
           }
           if (eventName === 'onError') {
-            console.log('❌ Error al recortar:', payload);
             Alert.alert('Error', 'No se pudo recortar el video.');
           }
-        }
+        },
       );
     } catch (error) {
-      console.error('❌ Error al abrir el editor:', error);
       Alert.alert('Error', 'No se pudo abrir el editor de video.');
     }
   };
@@ -83,7 +92,7 @@ const AddStory = ({ isVisible, navigation }) => {
     }
 
     const options = {
-      mediaType: 'video',
+      mediaType: 'mixed',
       selectionLimit: 1,
       saveToPhotos: true,
     };
@@ -94,7 +103,7 @@ const AddStory = ({ isVisible, navigation }) => {
       setSelectedMedia(selected);
       setTrimmedVideo(null);
 
-      if (selected?.uri) {
+      if (selected?.type?.startsWith('video')) {
         await trimVideoWithEditor(selected.uri);
       }
     };
@@ -104,29 +113,28 @@ const AddStory = ({ isVisible, navigation }) => {
 
   const handleUploadStory = async () => {
     const media = trimmedVideo || selectedMedia;
-    if (!media && !audioUri) {
-      Alert.alert('Error', 'Debe grabar o seleccionar un archivo.');
+    if (!media) {
+      Alert.alert('Error', 'Debe seleccionar un archivo.');
       return;
     }
 
     setIsUploading(true);
-
     const formData = new FormData();
-    if (media) {
+
+    if (media?.type?.startsWith('image')) {
       formData.append('story', {
         uri: media.uri,
-        type: media.type || 'video/mp4',
-        name: 'story.mp4',
+        type: 'image/jpeg',
+        name: 'image.jpg',
       });
-    } else if (audioUri) {
+    } else {
       formData.append('story', {
-        uri: audioUri,
-        type: 'audio/mp4',
-        name: 'story.m4a',
+        uri: media.uri,
+        type: 'video/mp4',
+        name: 'story.mp4',
       });
     }
 
-    console.log( audioUri)
     formData.append('caption', caption);
 
     try {
@@ -134,11 +142,9 @@ const AddStory = ({ isVisible, navigation }) => {
       Alert.alert('Éxito', 'Historia subida correctamente.');
       setSelectedMedia(null);
       setTrimmedVideo(null);
-      setAudioUri(null);
       setCaption('');
-      navigation.goBack();
+      navigation.goBack()
     } catch (error) {
-      console.error('❌ Error subiendo historia:', error);
       Alert.alert('Error', 'No se pudo subir la historia.');
     } finally {
       setIsUploading(false);
@@ -167,10 +173,14 @@ const AddStory = ({ isVisible, navigation }) => {
             </TouchableOpacity>
           </View>
 
-
-
-          {(selectedMedia || trimmedVideo || audioUri) && (
+          {(selectedMedia || trimmedVideo) && (
             <View style={styles.previewContainer}>
+              {selectedMedia?.type?.startsWith('image') && (
+                <Image source={{ uri: selectedMedia.uri }} style={{ width: 200, height: 300, marginBottom: 10 }} />
+              )}
+              {selectedMedia?.type?.startsWith('video') && !trimmedVideo && (
+                <Video source={{ uri: selectedMedia.uri }} style={{ width: 200, height: 300 }} resizeMode="cover" />
+              )}
               <TextInput
                 style={styles.input}
                 placeholder="Escribe un texto..."
@@ -181,13 +191,8 @@ const AddStory = ({ isVisible, navigation }) => {
               <TouchableOpacity
                 style={[styles.uploadButton, isUploading && { opacity: 0.6 }]}
                 onPress={handleUploadStory}
-                disabled={isUploading}
-              >
-                {isUploading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Subir Historia</Text>
-                )}
+                disabled={isUploading}>
+                {isUploading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.buttonText}>Subir Historia</Text>}
               </TouchableOpacity>
             </View>
           )}
@@ -198,79 +203,18 @@ const AddStory = ({ isVisible, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  container: {
-    width: '90%',
-    backgroundColor: '#222',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 15,
-  },
-  title: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    color: '#ff4d4d',
-    fontSize: 20,
-  },
-  mediaButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 20,
-  },
-  mediaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#444',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-  },
-  mediaButtonText: {
-    color: 'white',
-    marginLeft: 6,
-  },
-  previewContainer: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  input: {
-    width: '100%',
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#555',
-    borderRadius: 10,
-    backgroundColor: '#333',
-    color: 'white',
-    marginBottom: 10,
-  },
-  uploadButton: {
-    backgroundColor: '#007BFF',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    minWidth: 150,
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    textAlign: 'center',
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.85)', justifyContent: 'center', alignItems: 'center' },
+  container: { width: '90%', backgroundColor: '#222', borderRadius: 20, padding: 20, alignItems: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 15 },
+  title: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  closeButton: { color: '#ff4d4d', fontSize: 20 },
+  mediaButtonsRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginBottom: 20 },
+  mediaButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#444', padding: 10, borderRadius: 10 },
+  mediaButtonText: { color: 'white', marginLeft: 6 },
+  previewContainer: { alignItems: 'center', width: '100%' },
+  input: { width: '100%', padding: 10, borderWidth: 1, borderColor: '#555', borderRadius: 10, backgroundColor: '#333', color: 'white', marginBottom: 10 },
+  uploadButton: { backgroundColor: '#007BFF', padding: 12, borderRadius: 10, alignItems: 'center', minWidth: 150 },
+  buttonText: { color: 'white', fontSize: 16, textAlign: 'center' },
 });
 
 export default AddStory;

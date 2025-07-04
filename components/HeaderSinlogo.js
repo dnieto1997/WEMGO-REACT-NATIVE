@@ -12,8 +12,9 @@ import {COLORS} from '../constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {SocketContext} from '../context/SocketContext';
 import {getHttps} from '../api/axios';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
-const HeaderwithLogoandIcons = ({ onRefresh}) => {
+const HeaderSinlogo = ({ onRefresh}) => {
   const navigation = useNavigation();
   const [DataUser, setDataUser] = useState({});
   const [unreadCount, setUnreadCount] = useState(0);
@@ -103,13 +104,12 @@ const HeaderwithLogoandIcons = ({ onRefresh}) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <Image
-          source={require('../assets/images/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </View>
+       <View style={styles.container2}>
+             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconContainer}>
+               <Ionicons name="arrow-back" size={22} color={COLORS.black} />
+             </TouchableOpacity>
+           
+           </View>
 
       <View>
         <View style={{flexDirection: 'row', gap: 5, right: 12}}>
@@ -159,6 +159,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: COLORS.white,
   },
+   container2: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',left:10},
   title: {
     fontSize: 22,
     fontFamily: 'Poppins-Bold',
@@ -207,4 +208,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-export default HeaderwithLogoandIcons;
+export default HeaderSinlogo;

@@ -20,23 +20,14 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 
 const DEFAULT_IMAGE = 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png';
 
-const Likes = ({ feedId, isVisible, feedOwnerId, onClose }) => {
+const EventLikes = ({ eventId, isVisible, feedOwnerId, onClose }) => {
   const navigation = useNavigation();
   const [peopleLike, setPeopleLikes] = useState([]);
   const [filteredLikes, setFilteredLikes] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [DataUser, setDataUser] = useState({});
    const [isFollowing, setIsFollowing] = useState(false);
-
-
-   
-  useEffect(() => {
-  if (!isVisible) {
-    setPeopleLikes([]);
-    setFilteredLikes([]);
-    setSearchText('');
-  }
-}, [isVisible]);
+  
 
   useFocusEffect(
     React.useCallback(() => {
@@ -67,8 +58,9 @@ const Likes = ({ feedId, isVisible, feedOwnerId, onClose }) => {
 
   const fetchLikes = async () => {
     try {
-      const response = await getHttps(`feed/likes/${feedId}`);
-      
+ 
+      const response = await getHttps(`like-event/likes/${eventId}`);
+   
       setPeopleLikes(response.data);
       setFilteredLikes(response.data); // inicial
     } catch (error) {
@@ -324,4 +316,4 @@ emptyText: {
 },
 });
 
-export default Likes;
+export default EventLikes;

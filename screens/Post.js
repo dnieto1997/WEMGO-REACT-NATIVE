@@ -1,4 +1,5 @@
-import React, {useEffect, useState, useContext, useCallback,useRef} from 'react';
+// Archivo: PostOptimized.js
+import React, { useEffect, useState, useContext, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,65 +11,48 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from 'react-native';
-
-import {getHttps, postHttps} from '../api/axios';
-import {SocketContext} from '../context/SocketContext';
-import CommentItem from '../components/CommentItem';
-
+import { getHttps, postHttps } from '../api/axios';
+import { SocketContext } from '../context/SocketContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import moment from 'moment';
-import Video from 'react-native-video';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import Tab from '../components/Tab';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import CommentItem from '../components/CommentItem';
 import Header from '../components/Header';
 import ImageViewerModal from '../components/ModalImage';
-import {useFocusEffect} from '@react-navigation/native';
-import VideoPost from '../components/VideoPost';
-import { COLORS } from '../constants';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 import Likes from '../components/Likes';
+import Tab from '../components/Tab';
+import MediaCarousel from '../components/MediaCarousel';
+import { useFocusEffect } from '@react-navigation/native';
+import { COLORS } from '../constants';
 
-const Post = ({navigation, route}) => {
-  const {id} = route.params;
-  const [feed, setFeed] = useState(null);
+const ITEM_WIDTH = Dimensions.get('window').width - 40;
+const FIXED_IMAGE_HEIGHT = 422;
+
+const Post = ({ navigation, route }) => {
+  const { id } = route.params;
   const [feeds, setFeeds] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [DataUser, setDataUser] = useState({});
-  const [imageSizes, setImageSizes] = useState({});
+  const [isImageViewVisible, setImageViewVisible] = useState(false);
+  const [currentImages, setCurrentImages] = useState([]);
+  const [imageIndex, setImageIndex] = useState(0);
+  const [visibleFeedId, setVisibleFeedId] = useState(null);
+  const [likeLoading, setLikeLoading] = useState({});
   const [isModalVisible, setModalVisible] = useState(false);
   const [commentFeedId, setCommentFeedId] = useState(null);
-  const [currentImages, setCurrentImages] = useState([]);
-  const [isImageViewVisible, setImageViewVisible] = useState(false);
-  const [imageIndex, setImageIndex] = useState(0);
-  const [activeImageIndex, setActiveImageIndex] = useState({});
-  const [likeLoading, setLikeLoading] = useState({});
-  const ITEM_WIDTH = Dimensions.get('window').width - 40;
-  const DEFAULT_VIDEO_RATIO = 1.0;
-  const [visibleFeedId, setVisibleFeedId] = useState(null);
-    const [showFullDescription, setShowFullDescription] = useState(false);
-     const [userFeedId, setUserFeedId] = useState(null);
-       const [currentFeedId, setCurrentFeedId] = useState(null);
-        const [isModalVisible2, setModalVisible2] = useState(false);
-        const commentId = route?.params?.commentId || null;
-        const [showComments, setShowComments] = useState(false);
-const [focusCommentId, setFocusCommentId] = useState(null);
+  const [isModalVisible2, setModalVisible2] = useState(false);
+  const [currentFeedId, setCurrentFeedId] = useState(null);
+  const [userFeedId, setUserFeedId] = useState(null);
+  const [expandedDescriptions, setExpandedDescriptions] = useState({});
+  const [focusCommentId, setFocusCommentId] = useState(null);
+  const [pendingFeeds, setPendingFeeds] = useState(null);
 
+  const { listenForReactions, sendReactionNotification } = useContext(SocketContext);
 
-
-  const {listenForReactions, sendReactionNotification} =
-    useContext(SocketContext);
-
-
-useEffect(() => {
-  if (commentId) {
-    setModalVisible(true);
-  }
-}, [commentId]);
-   
-  // Carga info del usuario desde AsyncStorage
   useEffect(() => {
     const loadUserData = async () => {
       const data = await AsyncStorage.getItem('userData');
@@ -77,428 +61,199 @@ useEffect(() => {
     loadUserData();
   }, []);
 
-  // Fetch inicial o cuando cambia el id
   useEffect(() => {
     fetchFeed(1);
   }, [id]);
 
-  // Escuchar eventos socket para actualizar feed
   useEffect(() => {
-    const unsubscribe = listenForReactions(() => {
-      fetchFeed(1);
-    });
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
+    const unsubscribe = listenForReactions(() => fetchFeed(1));
+    return () => unsubscribe && unsubscribe();
   }, []);
 
-  // Fetch de feeds, con paginación
-  const fetchFeed = async (newPage = 1) => {
-    if (isLoading || isLoadingMore || !hasMore) return;
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.refresh) fetchFeed(1);
+    }, [route.params?.refresh])
+  );
 
+const fetchFeed = async (newPage = 1, silent = false) => {
+  if ((isLoading || isLoadingMore || !hasMore) && !silent) return;
+
+  if (!silent) {
     newPage === 1 ? setIsLoading(true) : setIsLoadingMore(true);
-    try {
-      const response = await getHttps(`feed/${id}?page=${newPage}&limit=5`);
-      const data = response.data;
+  }
 
-      if (data.length < 5) setHasMore(false);
-      setPage(newPage);
+  try {
+    const response = await getHttps(`feed/${id}?page=${newPage}&limit=5`);
+    const data = response.data;
 
-      if (newPage === 1) {
-        setFeed(data[0] || null);
-        setFeeds(data);
-      } else {
-        setFeeds(prev => [...prev, ...data]);
-      }
-    } catch (error) {
-      if (error.status === 401) navigation.navigate('Login');
-      console.error('Error fetching feed:', error);
-    } finally {
+    setHasMore(data.length >= 5);
+    setPage(newPage);
+
+    if (isModalVisible) {
+      // Espera para actualizar hasta que el modal se cierre
+      setPendingFeeds(newPage === 1 ? data : [...feeds, ...data]);
+    } else {
+      // Actualiza directamente si no hay modal
+      setFeeds(prev => (newPage === 1 ? data : [...prev, ...data]));
+    }
+  } catch (error) {
+    if (error.status === 401) navigation.navigate('Login');
+  } finally {
+    if (!silent) {
       setIsLoading(false);
       setIsLoadingMore(false);
     }
+  }
+};
+
+const handleCloseModal = () => {
+  setModalVisible(false);
+  if (pendingFeeds) {
+    setFeeds(pendingFeeds);
+    setPendingFeeds(null);
+  }
+};
+
+const handleClick = useCallback(async idFeed => {
+  if (likeLoading[idFeed]) return;
+
+  const index = feeds.findIndex(f => f.feed_id === idFeed);
+  if (index === -1) return;
+
+  const updated = [...feeds];
+  const currentFeed = updated[index];
+  const wasLiked = currentFeed.userLiked;
+
+  // 🔢 Asegurarse de que likeCount es un número
+  const likeCountNumber = parseInt(currentFeed.likeCount || '0', 10);
+
+  // ✅ Aplicar cambio optimista con suma segura
+  updated[index] = {
+    ...currentFeed,
+    userLiked: !wasLiked,
+    likeCount: wasLiked
+      ? Math.max(0, likeCountNumber - 1)
+      : likeCountNumber + 1,
   };
+  setFeeds(updated);
+  setLikeLoading(prev => ({ ...prev, [idFeed]: true }));
 
-  const handleLoadMore = () => {
-    if (!isLoadingMore && hasMore) {
-      fetchFeed(page + 1);
-    }
-  };
+  try {
+    await postHttps('like', { id_feed: idFeed, type: 'FEED' });
 
-  const handleClick = async idFeed => {
-    if (likeLoading[idFeed]) return;
-
-    const feedIndex = feeds.findIndex(feed => feed.feed_id === idFeed);
-    if (feedIndex === -1) return;
-
-    const currentFeed = feeds[feedIndex];
-    const wasLiked = currentFeed.userLiked;
-
-    const updatedFeeds = [...feeds];
-    updatedFeeds[feedIndex] = {
-      ...currentFeed,
-      userLiked: !wasLiked,
-      likeCount: wasLiked
-        ? Number(currentFeed.likeCount) - 1
-        : Number(currentFeed.likeCount) + 1,
-    };
-    setFeeds(updatedFeeds);
-
-    setLikeLoading(prev => ({...prev, [idFeed]: true}));
-
-    try {
-      await postHttps('like', {
-        id_feed: idFeed,
-        type: 'FEED',
-      });
-
+    // Solo enviar notificación si fue un "like"
+    if (!wasLiked) {
       sendReactionNotification({
         feedId: idFeed,
         reactorId: DataUser.id,
         reactionType: '❤️',
       });
-
-      // Opcional: si ya hiciste el optimistic update, puedes evitar recargar todo:
-      // await fetchFeed(1); ❌ esto sobreescribe el estado con el de backend
-    } catch (error) {
-      // Revertir en caso de error
-      const revertedFeeds = [...feeds];
-      revertedFeeds[feedIndex] = {
-        ...currentFeed,
-        userLiked: wasLiked,
-        likeCount: wasLiked
-          ? Number(currentFeed.likeCount)
-          : Number(currentFeed.likeCount) - 1,
-      };
-      setFeeds(revertedFeeds);
-
-      console.error('Error al dar like:', error.response || error.message);
-    } finally {
-      setLikeLoading(prev => ({...prev, [idFeed]: false}));
     }
-  };
+  } catch (err) {
+    // ❌ Revertir en caso de error
+    updated[index] = {
+      ...currentFeed,
+      userLiked: wasLiked,
+      likeCount: likeCountNumber,
+    };
+    setFeeds(updated);
+    console.error('Error al dar like:', err);
+  } finally {
+    setLikeLoading(prev => ({ ...prev, [idFeed]: false }));
+  }
+}, [feeds, likeLoading, DataUser.id]);
 
-  
 
-  // Navegar al perfil según usuario
-  const navigateToProfile = userId => {
-    navigation.navigate(DataUser.id === userId ? 'Profile' : 'FriendTimeline', {
-      id: userId,
+  const parsedUserPosts = useMemo(() => {
+    return feeds.map(post => {
+      let mediaList = [];
+      try {
+        mediaList = post.feed_img ? JSON.parse(post.feed_img) : [];
+      } catch {}
+      return { ...post, mediaList };
     });
-  };
+  }, [feeds]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (route.params?.refresh) {
-        fetchFeed(1);
-      }
-    }, [route.params?.refresh]),
-  );
+  const toggleDescription = feedId => {
+    setExpandedDescriptions(prev => ({ ...prev, [feedId]: !prev[feedId] }));
+  };
 
   const onViewRef = useRef(({ viewableItems }) => {
-  if (viewableItems.length > 0) {
-    const firstVisibleItem = viewableItems[0];
-    setVisibleFeedId(firstVisibleItem.item.feed_id);
-  }
-});
-
-const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
-
-  // Obtener tamaño de imagen/video para ajustar altura
-
-  // Abrir modal de comentarios
-
-  // Validar si es video
-  const isVideo = uri => /\.(mp4|mov|avi|webm)$/i.test(uri);
-
-  const renderMedia = (images, feedId) => {
-    const fetchImageSize = (uri, index) => {
-      const key = `${feedId}-${index}`;
-
-      if (uri.toLowerCase().endsWith('.mp4')) {
-        const calculatedHeight = ITEM_WIDTH * DEFAULT_VIDEO_RATIO;
-        setImageSizes(prev => ({
-          ...prev,
-          [key]: calculatedHeight,
-        }));
-        return;
-      }
-
-      Image.getSize(
-        uri,
-        (width, height) => {
-          const ratio = height / width;
-          const calculatedHeight = ITEM_WIDTH * ratio;
-          setImageSizes(prev => ({
-            ...prev,
-            [key]: calculatedHeight,
-          }));
-        },
-        error => {
-          setImageSizes(prev => ({
-            ...prev,
-            [key]: ITEM_WIDTH * 0.75,
-          }));
-          console.warn('Error getSize image:', error);
-        },
-      );
-    };
-    const FIXED_IMAGE_HEIGHT = 422; // o 400
-    const isMultiple = images.length > 1;
-
-    if (isMultiple) {
-      return (
-        <View>
-          <FlatList
-            data={images}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToInterval={ITEM_WIDTH}
-            snapToAlignment="start"
-            keyExtractor={(item, idx) => `${feedId}-${idx}`}
-            onMomentumScrollEnd={event => {
-              const index = Math.round(
-                event.nativeEvent.contentOffset.x / ITEM_WIDTH,
-              );
-              setActiveImageIndex(prev => ({
-                ...prev,
-                [feedId]: index,
-              }));
-            }}
-            renderItem={({item, index}) => {
-              const key = `${feedId}-${index}`;
-              const height = imageSizes[key];
-
-              if (!height) fetchImageSize(item, index);
-
-              return (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => {
-                    setCurrentImages(images);
-                    setImageIndex(index);
-                    setImageViewVisible(true);
-                  }}>
-                  <View
-                    style={{
-                      width: ITEM_WIDTH,
-                      height: FIXED_IMAGE_HEIGHT || 400,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}>
-                    {!height ? (
-                      <ActivityIndicator size="large" color="#888" />
-                    ) : isVideo(item) ? (
-                      <VideoPost
-                        videoUrl={item}
-                        isVisible={visibleFeedId === feedId}
-                        style={{width: ITEM_WIDTH, height: FIXED_IMAGE_HEIGHT}} // 👈 estilos personalizados
-                      />
-                    ) : (
-                      <Image
-                        source={{uri: item}}
-                        style={{width: ITEM_WIDTH, height: FIXED_IMAGE_HEIGHT}}
-                        resizeMode="cover"
-                      />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
-          />
-
-          {/* Contador de imágenes */}
-          <View
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: 10,
-              backgroundColor: 'rgba(0,0,0,0.6)',
-              borderRadius: 12,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-            }}>
-            <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 12}}>
-              {(activeImageIndex[feedId] || 0) + 1}/{images.length}
-            </Text>
-          </View>
-        </View>
-      );
+    if (viewableItems.length > 0) {
+      const firstVisibleItem = viewableItems[0];
+      setVisibleFeedId(firstVisibleItem.item.feed_id);
     }
-
-    // En renderMedia para imágenes individuales (no múltiples)
-    return (
-      <TouchableOpacity
-        onPress={() => {
-          setCurrentImages(images);
-          setImageIndex(0);
-          setImageViewVisible(true);
-        }}>
-        <View
-          style={{
-            width: ITEM_WIDTH,
-            height: FIXED_IMAGE_HEIGHT, // aquí pones fijo el alto
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}>
-          {isVideo(images[0]) ? (
-            <VideoPost
-              videoUrl={images[0]}
-               isVisible={visibleFeedId === feedId}
-              style={{width: ITEM_WIDTH, height: FIXED_IMAGE_HEIGHT}} // 👈 estilos personalizados
-            />
-          ) : (
-            <Image
-              source={{uri: images[0]}}
-              resizeMode="cover"
-              style={{width: ITEM_WIDTH, height: FIXED_IMAGE_HEIGHT}}
-            />
-          )}
-        </View>
-
-        <View
-          style={{
-            position: 'absolute',
-            top: 10,
-            right: 10,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            borderRadius: 12,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-          }}>
-          <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 12}}>
-            1/1
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  // Parsear feed_img JSON y agregar mediaList a cada post
-  const parsedUserPosts = feeds.map(post => {
-    let postMediaList = [];
-    if (post.feed_img) {
-      try {
-        postMediaList = JSON.parse(post.feed_img);
-      } catch (error) {
-        console.error('Error parsing userPost feed_img:', error);
-      }
-    }
-    return {
-      ...post,
-      mediaList: postMediaList,
-    };
   });
 
-  // Render individual de un post en FlatList
-  const renderItem = ({item}) => {
-    return (
-      <View style={styles.postContainer}>
-        <TouchableOpacity onPress={() => navigateToProfile(item.userId)}>
-          <View style={styles.header}>
-            <Image source={{uri: item.users_img}} style={styles.imgProfile} />
-            <Text style={styles.profileName}>
-              {`${item.users_first_name} ${item.users_last_name}`}
-            </Text>
-          </View>
-        </TouchableOpacity>
+  const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
 
-        <View style={styles.imageContainer}>
-          {item.mediaList.length > 0 &&
-            renderMedia(item.mediaList, item.feed_id)}
-
-          <CommentItem
-            feedId={item.feed_id}
-            isVisible={isModalVisible && commentFeedId === item.feed_id}
-            feedOwnerId={item.users_id}
-            onClose={() => setModalVisible(false)}
-            onCommentAdded={() => fetchFeed(1)}
-            onCommentDeleted={() => fetchFeed(1)}
-            focusCommentId={focusCommentId}
-           
-          />
+  const renderItem = ({ item }) => (
+    <View style={styles.postContainer}>
+      <TouchableOpacity onPress={() => navigation.navigate(DataUser.id === item.userId ? 'Profile' : 'FriendTimeline', { id: item.userId })}>
+        <View style={styles.header}>
+          <Image source={{ uri: item.users_img }} style={styles.imgProfile} />
+          <Text style={styles.profileName}>{item.users_first_name} {item.users_last_name}</Text>
         </View>
+      </TouchableOpacity>
 
-    <View style={styles.interactionRow}>
-  {/* Corazón + número de likes */}
-  <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 20 }}>
-    <TouchableOpacity
-      onPress={() => handleClick(item.feed_id)}
-      disabled={likeLoading[item.feed_id]}
-      style={styles.likeContainer}
-    >
-      <MaterialCommunityIcons
-        name="cards-heart-outline"
-        size={30}
-        color={item.userLiked ? 'red' : 'gray'}
-      />
-    </TouchableOpacity>
+      {item.mediaList.length > 0 && (
+        <MediaCarousel
+          images={item.mediaList}
+          feedId={item.feed_id}
+          visibleFeedId={visibleFeedId}
+          isScreenFocused={true}
+          setCurrentImages={setCurrentImages}
+          setImageIndex={setImageIndex}
+          setImageViewVisible={setImageViewVisible}
+        />
+      )}
 
-    <TouchableOpacity    onPress={() => {
-                setUserFeedId(feed.userId);
-                setCurrentFeedId(feed.feed_id);
-                setModalVisible2(true);
-              }}>
-      <Text style={styles.likeText}>{item.likeCount}</Text>
-    </TouchableOpacity>
-  </View>
+   
 
-  {/* Comentarios */}
+      <View style={styles.interactionRow}>
+        <TouchableOpacity onPress={() => handleClick(item.feed_id)} disabled={likeLoading[item.feed_id]}>
+          <MaterialCommunityIcons name="cards-heart-outline" size={30} color={item.userLiked ? 'red' : 'gray'} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => {
+          setUserFeedId(item.userId);
+          setCurrentFeedId(item.feed_id);
+          setModalVisible2(true);
+        }}>
+          <Text style={styles.likeText}>{item.likeCount}</Text>
+        </TouchableOpacity>
   <TouchableOpacity
-    onPress={() => {
-      setCommentFeedId(item.feed_id);
-      setModalVisible(true);
-    }}
-    style={styles.commentContainer}
-  >
-    <MaterialCommunityIcons name="comment" size={30} color="white" />
-    <Text style={styles.likeText}>{item.commentCount}</Text>
-  </TouchableOpacity>
-</View>
-
-
-        <Text style={styles.profileName}>
-          {`${item.users_first_name} ${item.users_last_name}`}
-        </Text>
-
-            <Text
-                    style={[styles.eventAddress, {flexWrap: 'wrap'}]}
-                    numberOfLines={showFullDescription ? undefined : 2}
-                    ellipsizeMode={showFullDescription ? undefined : 'tail'}>
-                    {item.feed_description}
-                  </Text>
-        
-                  {item.feed_description && item.feed_description.length > 50 && (
-                    <TouchableOpacity
-                      onPress={() => setShowFullDescription(!showFullDescription)}>
-                      <Text
-                        style={{
-                          color: 'white',
-                          fontSize: 12,
-                          marginTop: 2,
-                          fontFamily: 'Poppins-Bold',
-                        }}>
-                        {showFullDescription ? 'Ver menos' : 'Ver más'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-        <Text style={styles.dateText}>
-          {moment(item.feed_date_publication).format('D MMMM')}
-        </Text>
+  onPress={() => {
+    setCommentFeedId(item.feed_id);
+    setModalVisible(true);
+  }}
+  style={styles.iconWithCount}>
+  <MaterialCommunityIcons name="comment" size={26} color="white" />
+  <Text style={styles.iconCount}>{item.commentCount}</Text>
+</TouchableOpacity>
       </View>
-    );
-  };
 
-  if (isLoading && page === 1) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="white" />
-        <Text style={styles.loadingText}>Cargando publicaciones...</Text>
-      </SafeAreaView>
-    );
-  }
+      <Text style={styles.profileName}>{item.users_first_name} {item.users_last_name}</Text>
+      <Text numberOfLines={expandedDescriptions[item.feed_id] ? undefined : 2} style={styles.eventAddress}>{item.feed_description}</Text>
+
+      {item.feed_description?.length > 50 && (
+        <TouchableOpacity onPress={() => toggleDescription(item.feed_id)}>
+          <Text style={{ color: 'white', fontSize: 12 }}>Ver {expandedDescriptions[item.feed_id] ? 'menos' : 'más'}</Text>
+        </TouchableOpacity>
+      )}
+
+      <Text style={styles.dateText}>{moment(item.feed_date_publication).format('D MMMM')}</Text>
+    </View>
+  );
+
+if (isLoading && page === 1 && !isModalVisible) {
+  return (
+    <SafeAreaView style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="white" />
+      <Text style={styles.loadingText}>Cargando publicaciones...</Text>
+    </SafeAreaView>
+  );
+}
 
   return (
     <SafeAreaView style={styles.area}>
@@ -507,55 +262,55 @@ const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
           data={parsedUserPosts}
           keyExtractor={item => `${item.feed_id}`}
           renderItem={renderItem}
-          onEndReached={handleLoadMore}
+          onEndReached={() => fetchFeed(page + 1)}
           onEndReachedThreshold={0.5}
+          windowSize={5}
+          maxToRenderPerBatch={5}
+          initialNumToRender={3}
+          removeClippedSubviews
+          updateCellsBatchingPeriod={50}
           onViewableItemsChanged={onViewRef.current}
           viewabilityConfig={viewConfigRef.current}
           ListHeaderComponent={
-            <View style={{top: 20, left: 10}}>
-                <View style={styles.container2}>
-                   <TouchableOpacity
-                     onPress={() => {
-                        navigation.navigate("Event");
-                     }}
-                     style={styles.iconContainer}>
-                     <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-                   </TouchableOpacity>
-                   <Text style={styles.title}>Publicaciones</Text>
-                   <TouchableOpacity onPress={() => {}}></TouchableOpacity>
-                 </View>
+            <View style={{ top: 20, left: 10 }}>
+              <View style={styles.container2}>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('Event')}
+                  style={styles.iconContainer}>
+                  <Ionicons name="arrow-back" size={22} color={COLORS.black} />
+                </TouchableOpacity>
+                <Text style={styles.title}>Publicaciones</Text>
+                <TouchableOpacity onPress={() => {}} />
+              </View>
             </View>
-          }
-          ListFooterComponent={
-            isLoadingMore && (
-              <Text
-                style={{
-                  color: 'white',
-                  textAlign: 'center',
-                  marginVertical: 10,
-                  fontFamily: 'Poppins-Bold',
-                  fontSize: 15,
-                }}>
-                Cargando más...
-              </Text>
-            )
           }
         />
       </View>
-
       <ImageViewerModal
         visible={isImageViewVisible}
         images={currentImages}
         index={imageIndex}
         onClose={() => setImageViewVisible(false)}
       />
-
-          <Likes
-              feedId={currentFeedId}
-              isVisible={isModalVisible2}
-              feedOwnerId={userFeedId}
-              onClose={() => setModalVisible2(false)}
-            />
+      <Likes
+        feedId={currentFeedId}
+        isVisible={isModalVisible2}
+        feedOwnerId={userFeedId}
+        onClose={() => setModalVisible2(false)}
+      />
+   {isModalVisible && commentFeedId && (
+  <CommentItem
+    feedId={commentFeedId}
+    isVisible={isModalVisible}
+    feedOwnerId={
+      feeds.find(f => f.feed_id === commentFeedId)?.users_id || null
+    }
+    onClose={handleCloseModal}
+    onCommentAdded={() => fetchFeed(1, true)}
+    onCommentDeleted={() => fetchFeed(1, true)}
+    focusCommentId={focusCommentId}
+  />
+)}
 
       <Tab />
     </SafeAreaView>
@@ -563,89 +318,32 @@ const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 50 });
 };
 
 const styles = StyleSheet.create({
-  area: {flex: 1, backgroundColor: 'black'},
-  container: {flex: 1, backgroundColor: 'black', marginBottom: 100},
-  postContainer: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-    top: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'black', // o el color de fondo que uses
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: 'white',
-    textAlign: 'center',
-  },
-  header: {flexDirection: 'row', alignItems: 'center', marginBottom: 8},
-  imgProfile: {width: 40, height: 40, borderRadius: 20, marginRight: 10},
-  profileName: {fontWeight: 'bold', fontSize: 16, color: 'white'},
-  imageContainer: {borderRadius: 10, overflow: 'hidden'},
-  imageWrapper: {position: 'relative'},
-  caption: {marginTop: 5, fontSize: 14, color: 'white'},
-  dateText: {marginTop: 5, fontSize: 12, color: '#aaa'},
-interactionRow: {
+  area: { flex: 1, backgroundColor: 'black' },
+  container: { flex: 1, backgroundColor: 'black', marginBottom: 100 },
+  postContainer: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#333', top: 20 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'black' },
+  loadingText: { marginTop: 12, fontSize: 16, color: 'white', textAlign: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  imgProfile: { width: 40, height: 40, borderRadius: 20, marginRight: 10 },
+  profileName: { fontWeight: 'bold', fontSize: 16, color: 'white' },
+  eventAddress: { fontSize: 14, color: 'white', fontFamily: 'Poppins-Regular' },
+  dateText: { marginTop: 5, fontSize: 12, color: '#aaa' },
+  interactionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  likeText: { fontSize: 20, marginLeft: 8, color: 'white' },
+  container2: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  iconContainer: { height: 30, width: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 999, backgroundColor: COLORS.white },
+  title: { fontSize: 22, fontFamily: 'Poppins-Bold', color: COLORS.white },
+  iconWithCount: {
   flexDirection: 'row',
   alignItems: 'center',
-  marginTop: 8,
+  gap: 6,
+  marginLeft: 16,
 },
-  likeContainer: {flexDirection: 'row', alignItems: 'center', padding: 4},
-  likeText: {fontSize: 20, marginLeft: 8, color: 'white'},
-  commentContainer: {flexDirection: 'row', alignItems: 'center'},
-  commentText: {fontSize: 14, marginLeft: 8, color: 'white'},
-  imageCount: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(15, 11, 11, 0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-    eventAddress: {
-    fontSize: 14,
-    color: 'white',
-    fontFamily: 'Poppins-Regular',
-  },
-  imageCountText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-   container2: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    iconContainer: {
-      height: 30,
-      width: 30,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 999,
-      backgroundColor: COLORS.white,
-    },
-    title: {
-      fontSize: 22,
-      fontFamily: 'Poppins-Bold',
-      color: COLORS.white,
-    },
-    point: {
-      position: 'absolute',
-      top: 0,
-      right: 8,
-      height: 4,
-      width: 4,
-      borderRadius: 999,
-      backgroundColor: COLORS.red,
-      zIndex: 999,
-    },
+iconCount: {
+  color: 'white',
+  fontSize: 16,
+  fontWeight: '600',
+},
 });
 
 export default Post;

@@ -8,27 +8,56 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-const StoriesList = ({ stories, navigation, DataUser, User }) => {
+const StoriesList = ({ stories, navigation, DataUser }) => {
+ 
+  const filteredStories = stories?.filter(item => item.user.id !== DataUser?.id) || [];
+
   return (
     <FlatList
-      data={stories.filter(item => item.user.id !== DataUser.id)}
+      data={filteredStories}
       horizontal
-      keyExtractor={(item, index) => index.toString()}
+      keyExtractor={(item, index) => `${item.user?.id}-${index}`}
       contentContainerStyle={styles.storiesContainer}
+      ListHeaderComponent={
+        <View style={styles.storyItem}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ViewStories', { id: DataUser?.id })}
+          >
+            <Image
+              source={{
+                uri:
+                  DataUser?.img ||
+                  'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
+              }}
+              style={styles.storyImage}
+            />
+          </TouchableOpacity>
+         <TouchableOpacity
+  onPress={() => navigation.navigate('AddStory')}
+  style={styles.plusIcon}
+>
+  <MaterialIcons name="add" size={23} color="white" />
+</TouchableOpacity>
+          <Text style={styles.storyText}>Tu Historia</Text>
+        </View>
+      }
       renderItem={({ item }) => (
         <TouchableOpacity
           onPress={() => navigation.navigate('ViewStories', { id: item.user.id })}
           style={styles.storyItem}
         >
-          {item.stories[0].isLoading ? (
+          {item.stories[0]?.isLoading ? (
             <View style={[styles.storyImage, styles.loaderContainer]}>
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color="#944af5" />
             </View>
           ) : (
             <Image
               source={{
-                uri: item.stories.length > 0 ? item.stories[0].storyUrl : item.user.img,
+                uri:
+                  item.stories[0]?.storyUrl || item.user?.img ||
+                  'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
               }}
               style={styles.storyImage}
             />
@@ -38,31 +67,6 @@ const StoriesList = ({ stories, navigation, DataUser, User }) => {
           </Text>
         </TouchableOpacity>
       )}
-      ListHeaderComponent={
-        <View style={styles.storyItem}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('ViewStories', { id: DataUser.id })}
-            style={styles.storyButton}
-          >
-            <Image
-              source={{
-                uri: User?.img ||
-                  'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
-              }}
-              style={styles.storyImage}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('AddStory')}
-            style={styles.plusIcon}
-          >
-            <Text style={styles.plusText}>+</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.storyText}>Tu Historia</Text>
-        </View>
-      }
     />
   );
 };
@@ -81,8 +85,8 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: 31,
-    borderWidth: 2,
-    borderColor: 'white',
+    borderWidth: 3,
+    borderColor: '#864ae8',
   },
   storyText: {
     fontSize: 12,
@@ -93,28 +97,26 @@ const styles = StyleSheet.create({
   },
   plusIcon: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    top: 10,
-    backgroundColor: 'black',
-    width: 23,
-    height: 23,
-    borderRadius: 50,
+    top:35,
+    right: -1,
+    backgroundColor: '#864ae8',
+    width: 22,
+    height: 22,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
   plusText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
-  },
-  storyButton: {
-    // Espacio reservado si quieres añadir estilo al botón principal
+    marginTop: -1,
   },
   loaderContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#444', // opcional, para que no se vea vacío
+    backgroundColor: '#444',
   },
 });
 
