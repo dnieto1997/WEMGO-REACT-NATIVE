@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import React, {useState, useContext} from 'react';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {COLORS, SIZES, icons, images} from '../constants';
+import {COLORS, SIZES, icons} from '../constants';
 import Feather from 'react-native-vector-icons/Feather';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -126,7 +126,7 @@ const Settings = ({navigation}) => {
       <Modal transparent={true} visible={showLogoutModal} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Image source={icons.logout} style={styles.modalIcon} />
+           <MaterialIcons name="logout" size={24} color="#fff" />
             <Text style={styles.modalTitle}>¿Cerrar sesión?</Text>
             <Text style={styles.modalMessage}>
               Estás a punto de cerrar sesión de tu cuenta. ¿Deseas continuar?

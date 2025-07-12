@@ -56,6 +56,7 @@
     "react-native-video-trim": "^4.1.0",
     "react-native-view-shot": "^4.0.3",
     "react-native-virtualized-view": "^1.0.0",
+    "react-native-vision-camera": "^4.7.0",
     "socket.io-client": "^4.8.1",
     "validate.js": "^0.13.1"
   },

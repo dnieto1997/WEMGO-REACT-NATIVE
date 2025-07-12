@@ -14,6 +14,7 @@ import { getHttps, patchHttps } from '../api/axios';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Header from '../components/Header';
 import Tab from '../components/Tab';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MemoizedNotification = React.memo(({ item, navigation }) => {
   const { type, message, data, created_at, user } = item;
@@ -112,6 +113,7 @@ const Notifications = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
 
 
   
@@ -174,9 +176,9 @@ const response1=await patchHttps('notification/markAsRead')
 
   return (
     <View style={styles.container}>
-      <View style={{ top: 7, left: 10 }}>
-        <Header title="Notificaciones" />
-      </View>
+    <View style={{ paddingTop: insets.top + 7, paddingLeft: 10 }}>
+  <Header title="Notificaciones" />
+</View>
       <FlatList
         contentContainerStyle={{ paddingTop: 10, paddingBottom: 80 }}
         data={notifications}

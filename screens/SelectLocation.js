@@ -16,6 +16,7 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import {validateInput} from '../utils/actions/formActions';
 import {reducer} from '../utils/reducers/formReducers';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const isTestMode = true;
 
@@ -36,6 +37,7 @@ const SelectLocation = ({navigation}) => {
   const [error, setError] = useState();
   const [isLoading, setIsLoading] = useState(false);
   const [formState, dispatchFormState] = useReducer(reducer, initialState);
+  
 
   const inputChangedHandler = useCallback(
     (inputId, inputValue) => {
@@ -137,7 +139,7 @@ const SelectLocation = ({navigation}) => {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.headerIconContainer}>
-            <Image source={icons.back} style={styles.back} />
+            <MaterialIcons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Select Location</Text>
         </View>
@@ -147,11 +149,12 @@ const SelectLocation = ({navigation}) => {
               style={styles.selectFlagContainer}
               onPress={() => setModalVisible(true)}>
               <View style={{justifyContent: 'center'}}>
-                <Image
-                  source={icons.down}
-                  resizeMode="contain"
-                  style={styles.downIcon}
-                />
+             <MaterialIcons
+  name="keyboard-arrow-down"
+  size={24}
+  color="#fff"
+ 
+/>
               </View>
               <View style={{justifyContent: 'center', marginLeft: 5}}>
                 <Image
@@ -173,7 +176,9 @@ const SelectLocation = ({navigation}) => {
             errorText={formState.inputValidities['address']}
             placeholder="Add Your City"
             placeholderTextColor={COLORS.black}
-            icon={icons.location}
+             iconComponent={
+    <MaterialIcons name="location-on" size={22} color={COLORS.black} />
+  }
           />
         </View>
         <Button

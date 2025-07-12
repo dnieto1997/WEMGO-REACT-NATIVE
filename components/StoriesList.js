@@ -8,9 +8,12 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import FastImage from 'react-native-fast-image';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const StoriesList = ({ stories, navigation, DataUser }) => {
+
+
  
   const filteredStories = stories?.filter(item => item.user.id !== DataUser?.id) || [];
 
@@ -43,30 +46,33 @@ const StoriesList = ({ stories, navigation, DataUser }) => {
           <Text style={styles.storyText}>Tu Historia</Text>
         </View>
       }
-      renderItem={({ item }) => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('ViewStories', { id: item.user.id })}
-          style={styles.storyItem}
-        >
-          {item.stories[0]?.isLoading ? (
-            <View style={[styles.storyImage, styles.loaderContainer]}>
-              <ActivityIndicator size="small" color="#944af5" />
-            </View>
-          ) : (
-            <Image
-              source={{
-                uri:
-                  item.stories[0]?.storyUrl || item.user?.img ||
-                  'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
-              }}
-              style={styles.storyImage}
-            />
-          )}
-          <Text style={styles.storyText} numberOfLines={1}>
-            {item.user.first_name} {item.user.last_name}
-          </Text>
-        </TouchableOpacity>
+      renderItem={({ item }) => {
+  const borderColor = item.viewAllStories ? 'white' : '#944af5';
+
+  return (
+    <TouchableOpacity
+      onPress={() => navigation.navigate('ViewStories', { id: item.user.id })}
+      style={styles.storyItem}
+    >
+      {item.stories[0]?.isLoading ? (
+        <View style={[styles.storyImage, { borderColor }, styles.loaderContainer]}>
+          <ActivityIndicator size="small" color="#944af5" />
+        </View>
+      ) : (
+     <FastImage
+  source={{ uri: item.user?.img }}
+  style={[
+    styles.storyImage,
+    { borderColor: item.viewAllStories ? '#d3d3d3' : '#864ae8' }, // gris o morado
+  ]}
+/>
       )}
+      <Text style={styles.storyText} numberOfLines={1}>
+        {item.user.first_name} {item.user.last_name}
+      </Text>
+    </TouchableOpacity>
+  );
+}}
     />
   );
 };
@@ -85,8 +91,8 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: 31,
-    borderWidth: 3,
-    borderColor: '#864ae8',
+     borderWidth: 3,
+  
   },
   storyText: {
     fontSize: 12,

@@ -13,6 +13,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import CheckBox from '@react-native-community/checkbox';
 import {COLORS, SIZES, FONTS, icons, images} from '../constants';
 import Input from '../components/Input';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {loginHttps, postHttps} from '../api/axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -91,7 +92,7 @@ const Login = ({navigation}) => {
               placeholder="Correo"
               placeholderTextColor={COLORS.white}
               keyboardType="email-address"
-              icon={icons.email}
+              iconComponent={<MaterialIcons name="email" size={20} color={COLORS.white} />}
               value={email}
               onChangeText={setEmail}
             />
@@ -104,18 +105,20 @@ const Login = ({navigation}) => {
                 placeholder="Contraseña"
                 placeholderTextColor={COLORS.white}
                 secureTextEntry={!showPassword}
-                icon={icons.lock}
+                iconComponent={<MaterialIcons name="lock" size={20} color={COLORS.white} />}
                 value={password}
                 onChangeText={setPassword}
               />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}>
-                <Image
-                  source={showPassword ? icons.eye : icons.eyeOff}
-                  style={styles.eyeIcon}
-                />
-              </TouchableOpacity>
+           <TouchableOpacity
+  onPress={() => setShowPassword(!showPassword)}
+  style={styles.eyeButton}
+>
+  <MaterialIcons
+    name={showPassword ? 'visibility' : 'visibility-off'}
+    size={22}
+    color="#fff"
+  />
+</TouchableOpacity>
             </View>
 
             <View style={styles.checkBoxContainer}>
@@ -155,7 +158,7 @@ const Login = ({navigation}) => {
         <Modal transparent={true} visible={showModal} animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Image source={icons.fallo} style={styles.modalIcon} />
+             <MaterialIcons name="error-outline" size={40} color="red"  />
               <Text style={styles.modalTitle}>Error al iniciar sesión</Text>
               <Text style={styles.modalMessage}>
                 No se pudo iniciar sesión. Revisa tu correo y contraseña.

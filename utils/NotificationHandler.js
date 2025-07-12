@@ -15,8 +15,14 @@ const onNotificationClick = async data => {
   
   const {type, ...params} = data;
 
+  console.log(type)
+
   switch (type) {
     case 'message':
+      navigate('MessageDetails', {id: extraData.senderId});
+      break;
+
+         case 'story_message':
       navigate('MessageDetails', {id: extraData.senderId});
       break;
     case 'event':

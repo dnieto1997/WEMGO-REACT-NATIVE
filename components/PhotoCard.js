@@ -86,11 +86,11 @@ const PhotoCard = ({ image, id, idUser }) => {
 
 const styles = StyleSheet.create({
   container: {
-    width: 115,
-    height: 135,
-    padding: 1,
+    width: 120,
+    height: 120,
+    padding: 0,
     margin: 1,
-    left:10,
+    backgroundColor: 'transparent', // Sin fondo
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -98,16 +98,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-
+    backgroundColor: 'transparent', // Sin fondo
   },
   image: {
     width: '100%',
     height: '100%',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   placeholder: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#222',
+    backgroundColor: 'transparent', // Sin fondo
   },
   loader: {
     ...StyleSheet.absoluteFillObject,

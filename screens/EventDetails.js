@@ -28,6 +28,7 @@ import CommentEvents from '../components/CommentEvents';
 import RNBlobUtil from 'react-native-blob-util';
 import FastImage from 'react-native-fast-image';
 import EventLikes from '../components/EventLikes';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 
 
@@ -333,7 +334,9 @@ const downloadQrImage = async () => {
                 />
               </>
             ) : (
-              <Image source={icons.placeholder} style={styles.eventImage} />
+              <View style={[styles.eventImage, {justifyContent: 'center', alignItems: 'center', backgroundColor: '#222'}]}>
+  <MaterialIcons name="image" size={60} color="#aaa" />
+</View>
             )}
       <View style={{flexDirection: 'row', justifyContent: 'space-around', marginTop: 10}}>
   {/* Botón Me gusta */}
@@ -437,11 +440,9 @@ const downloadQrImage = async () => {
             {/* Organizador */}
             <View style={styles.organizerContainer}>
               <View style={{flexDirection: 'row'}}>
-                <Image
-                  source={icons.avatar}
-                  resizeMode="contain"
-                  style={styles.avatar}
-                />
+             <View style={styles.avatar}>
+  <MaterialIcons name="person" size={36} color="#ccc" />
+</View>
                 <TouchableOpacity style={{marginLeft: 12}}>
                   <Text style={styles.eventTitle}>
                     Organizado Por: {company.name}
@@ -457,11 +458,7 @@ const downloadQrImage = async () => {
               {/* Fecha y Hora */}
               <View style={{flexDirection: 'row', marginTop: 16}}>
                 <View style={styles.iconContainer}>
-                  <Image
-                    source={icons.calendar}
-                    resizeMode="contain"
-                    style={styles.icon}
-                  />
+                <MaterialIcons name="calendar-today" size={20} color="white" />
                 </View>
 
                 <View style={{marginLeft: 12}}>
@@ -477,11 +474,7 @@ const downloadQrImage = async () => {
                   </Text>
                 </View>
                 <View style={styles.iconContainer}>
-                  <Image
-                    source={icons.calendar}
-                    resizeMode="contain"
-                    style={styles.icon}
-                  />
+                 <MaterialIcons name="calendar-today" size={20} color="white" />
                 </View>
                 <View style={{marginLeft: 12}}>
                   <Text style={styles.iconTitle}>
@@ -503,11 +496,7 @@ const downloadQrImage = async () => {
               <View style={{flexDirection: 'row', marginTop: 8}}>
                 <View
                   style={[styles.iconContainer, {backgroundColor: '#3d9aff'}]}>
-                  <Image
-                    source={icons.location}
-                    resizeMode="contain"
-                    style={styles.icon}
-                  />
+                 <MaterialIcons name="location-on" size={20} color="white" />
                 </View>
                 <View style={{marginLeft: 12}}>
                   <Text style={styles.iconTitle}>
@@ -937,8 +926,6 @@ const styles = StyleSheet.create({
     color: 'white',
     textAlign: 'center',
   },
-
-
 
      buttonContainer1: {
     alignItems: 'center',

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { COLORS, SIZES, FONTS, icons } from '../constants'
 import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps'
 import LocationItem from '../components/LocationItem'
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const SearchLocation = ({ navigation }) => {
   return (
@@ -13,20 +14,13 @@ const SearchLocation = ({ navigation }) => {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.headerIconContainer}>
-            <Image
-              source={icons.back}
-              style={styles.back}
-            />
+        <MaterialIcons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Search Location</Text>
         </View>
         <View style={styles.searchContainer}>
           <TouchableOpacity>
-             <Image
-               source={icons.search}
-               resizeMode='contain'
-               style={styles.searchIcon}
-             />
+           <MaterialIcons name="search" size={24} color="#fff"  />
           </TouchableOpacity>
           <TextInput
             style={styles.searchInput}
@@ -34,20 +28,22 @@ const SearchLocation = ({ navigation }) => {
             placeholderTextColor={COLORS.black}
           />
           <TouchableOpacity>
-            <Image
-              source={icons.close}
-              resizeMode='contain'
-              style={styles.closeIcon}
-            />
+          <MaterialIcons
+  name="close"
+  size={24}
+  color="#fff"
+
+/>
           </TouchableOpacity>
         </View>
         <View style={styles.addLocationContainer}>
             <TouchableOpacity style={styles.sendIconContainer}>
-              <Image
-                source={icons.send}
-                style={styles.sendIcon}
-                resizeMode='contain'
-              />
+            <MaterialIcons
+  name="send"
+  size={24}
+  color="#fff"
+  
+/>
             </TouchableOpacity>
             <Text style={{...FONTS.body3}}>Current Location</Text>
         </View>
@@ -63,33 +59,34 @@ const SearchLocation = ({ navigation }) => {
               }}
             >
               <Marker
-                coordinate={{
-                  latitude: 48.8566,
-                  longitude: 2.3522,
-                }}
-                image={icons.locationMarker}
-                title="Move"
-                description="Address"
-                onPress={() => console.log("Move to another screen")}
-              >
-                <Callout tooltip>
-                  <View>
-                    <View style={styles.bubble}>
-                      <Text
-                        style={{
-                          ...FONTS.body4,
-                          fontWeight: 'bold',
-                          color: COLORS.black,
-                        }}
-                      >
-                        Event Address
-                      </Text>
-                    </View>
-                    <View style={styles.arrowBorder} />
-                    <View style={styles.arrow} />
-                  </View>
-                </Callout>
-              </Marker>
+  coordinate={{
+    latitude: 48.8566,
+    longitude: 2.3522,
+  }}
+  title="Move"
+  description="Address"
+  onPress={() => console.log('Move to another screen')}
+>
+  <MaterialIcons name="location-pin" size={36} color="#d00" />
+
+  <Callout tooltip>
+    <View>
+      <View style={styles.bubble}>
+        <Text
+          style={{
+            ...FONTS.body4,
+            fontWeight: 'bold',
+            color: COLORS.black,
+          }}
+        >
+          Event Address
+        </Text>
+      </View>
+      <View style={styles.arrowBorder} />
+      <View style={styles.arrow} />
+    </View>
+  </Callout>
+</Marker>
             </MapView>
           <Text style={{...FONTS.h2, color: COLORS.black}}>Address</Text>
           <LocationItem 

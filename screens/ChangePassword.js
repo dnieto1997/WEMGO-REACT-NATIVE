@@ -7,15 +7,13 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import React, {useCallback, useEffect, useReducer, useState} from 'react';
+import React, {useState} from 'react';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {COLORS, SIZES, FONTS, icons} from '../constants';
+import {COLORS, icons} from '../constants';
 import Input from '../components/Input';
-import Button from '../components/Button';
-import {validateInput} from '../utils/actions/formActions';
-import {reducer} from '../utils/reducers/formReducers';
 import Header from '../components/Header';
 import {patchHttps} from '../api/axios';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 
 const ChangePassword = ({navigation}) => {
@@ -66,45 +64,48 @@ const ChangePassword = ({navigation}) => {
         <Header title={'Cambio de Contraseña'} />
         <View style={styles.formContainer}>
         <View style={styles.passwordContainer}>
-  <Input
-    autoCapitalize="none"
-    id="pass"
-    placeholder="Contraseña Actual"
-    placeholderTextColor={COLORS.white}
-    secureTextEntry={!showpass}
-    icon={icons.lock}
-    value={pass}
-    onChangeText={setPass}
-  />
+<Input
+  autoCapitalize="none"
+  id="pass"
+  placeholder="Contraseña Actual"
+  placeholderTextColor={COLORS.white}
+  secureTextEntry={!showpass}
+  iconComponent={<MaterialIcons name="lock" size={20} color={COLORS.white} />}
+  value={pass}
+  onChangeText={setPass}
+/>
   <TouchableOpacity
-    onPress={() => setShowPass(!showpass)}
-    style={styles.eyeButton}>
-    <Image
-      source={showpass ? icons.eye : icons.eyeOff}
-      style={styles.eyeIcon}
-    />
-  </TouchableOpacity>
+  onPress={() => setShowPass(!showpass)}
+  style={styles.eyeButton}>
+  <MaterialIcons
+    name={showpass ? 'visibility' : 'visibility-off'}
+    size={22}
+    color="#fff"
+  />
+</TouchableOpacity>
 </View>
 
 <View style={styles.passwordContainer}>
-  <Input
-    autoCapitalize="none"
-    id="newpass"
-    placeholder="Nueva Contraseña"
-    placeholderTextColor={COLORS.white}
-    secureTextEntry={!shownewpass}
-    icon={icons.lock}
-    value={newpass}
-    onChangeText={setNewpass}
+<Input
+  autoCapitalize="none"
+  id="newpass"
+  placeholder="Nueva Contraseña"
+  placeholderTextColor={COLORS.white}
+  secureTextEntry={!shownewpass}
+  iconComponent={<MaterialIcons name="lock" size={20} color={COLORS.white} />}
+  value={newpass}
+  onChangeText={setNewpass}
+/>
+  
+<TouchableOpacity
+  onPress={() => setShownewPass(!shownewpass)}
+  style={styles.eyeButton}>
+  <MaterialIcons
+    name={shownewpass ? 'visibility' : 'visibility-off'}
+    size={22}
+    color="#fff"
   />
-  <TouchableOpacity
-    onPress={() => setShownewPass(!shownewpass)}
-    style={styles.eyeButton}>
-    <Image
-      source={shownewpass ? icons.eye : icons.eyeOff}
-      style={styles.eyeIcon}
-    />
-  </TouchableOpacity>
+</TouchableOpacity>
 </View>
 
 <View style={styles.passwordContainer}>
@@ -114,18 +115,19 @@ const ChangePassword = ({navigation}) => {
     placeholder="Confirma Nueva Contraseña"
     placeholderTextColor={COLORS.white}
     secureTextEntry={!showconfirmpass}
-    icon={icons.lock}
+    iconComponent={<MaterialIcons name="lock" size={20} color={COLORS.white} />}
     value={confirmpass}
     onChangeText={setConfirmPass}
   />
-  <TouchableOpacity
-    onPress={() => setShowconfirmPass(!showconfirmpass)}
-    style={styles.eyeButton}>
-    <Image
-      source={showconfirmpass ? icons.eye : icons.eyeOff}
-      style={styles.eyeIcon}
-    />
-  </TouchableOpacity>
+<TouchableOpacity
+  onPress={() => setShowconfirmPass(!showconfirmpass)}
+  style={styles.eyeButton}>
+  <MaterialIcons
+    name={showconfirmpass ? 'visibility' : 'visibility-off'}
+    size={22}
+    color="#fff"
+  />
+</TouchableOpacity>
 </View>
         </View>
         <TouchableOpacity
@@ -143,7 +145,13 @@ const ChangePassword = ({navigation}) => {
         <Modal transparent={true} visible={showModal} animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Image source={icons.fallo} style={styles.modalIcon} />
+             
+<MaterialIcons
+  name="error-outline"
+  size={60}
+  color="white"
+  style={styles.modalIcon}
+/>
               <Text style={styles.modalTitle}>Error al cambiar contraseña</Text>
               <Text style={styles.modalMessage}>
                 No se pudo cambiar la contraseña. Verifica tu contraseña actual.
@@ -161,7 +169,12 @@ const ChangePassword = ({navigation}) => {
         <Modal transparent={true} visible={successModal} animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Image source={icons.check} style={styles.modalIcon} />
+              <MaterialIcons
+  name="check-circle"
+  size={60}
+  color="white"
+  style={styles.modalIcon}
+/>
               <Text style={styles.modalTitle}>¡Contraseña cambiada!</Text>
               <Text style={styles.modalMessage}>
                 Tu contraseña se ha actualizado correctamente.

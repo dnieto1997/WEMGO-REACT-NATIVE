@@ -91,16 +91,20 @@ const handleUpload = async () => {
     const formData = new FormData();
 
     selectedMedia.forEach((media, index) => {
+     
       formData.append('feed', {
         uri: media.uri,
         type: media.type,
         name: media.fileName || `media_${Date.now()}_${index}`,
       });
     });
+    
 
     formData.append('description', caption);
 
     const response = await postHttpsStories('feed', formData, true);
+
+    console.log(response.data)
 
     if (socket && !alreadySent) {
        console.log('🟢 Enviando newFeed (primer intento)');
@@ -163,6 +167,7 @@ const handleUpload = async () => {
         }
       }, 1000);
     } else {
+      console.log(error)
       Alert.alert('Error', 'No se pudo subir la publicación.');
       setLoading(false);
     }

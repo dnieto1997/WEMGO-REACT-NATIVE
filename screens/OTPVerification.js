@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import Button from '../components/Button'
 import OTPTextInput from 'react-native-otp-textinput';
 import { COLORS, SIZES, icons } from '../constants'
-
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 const OTPVerification = ({ navigation }) => {
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -58,10 +58,7 @@ const OTPVerification = ({ navigation }) => {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.headerIconContainer}>
-            <Image
-              source={icons.back}
-              style={styles.back}
-            />
+            <MaterialIcons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>OTP Verification</Text>
         </View>

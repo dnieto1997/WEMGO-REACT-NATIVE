@@ -5,6 +5,7 @@ import Button from '../components/Button';
 import OTPTextInput from 'react-native-otp-textinput';
 import { COLORS, SIZES, icons } from '../constants';
 import { postHttps } from '../api/axios'; // Asegúrate de que esta función esté correctamente configurada.
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const OTPVerification2 = ({ navigation, route }) => {
   const { email } = route.params;
@@ -107,7 +108,7 @@ const OTPVerification2 = ({ navigation, route }) => {
       <View style={styles.container}>
         <View style={styles.headerContainer}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconContainer}>
-            <Image source={icons.back} style={styles.back} />
+          <MaterialIcons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Verificación OTP</Text>
         </View>

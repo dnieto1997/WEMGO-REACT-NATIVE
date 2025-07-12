@@ -1,73 +1,51 @@
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   Text,
 } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import FastImage from 'react-native-fast-image';
 import AntDesign from 'react-native-vector-icons/AntDesign';
 import { useNavigation } from '@react-navigation/native';
-import { createThumbnail } from 'react-native-create-thumbnail';
 import { deleteHttps } from '../api/axios';
 
-const isVideo = (url) => {
-  const videoExtensions = ['.mp4', '.mov', '.avi', '.webm'];
-  return videoExtensions.some((ext) => url?.toLowerCase().endsWith(ext));
-};
 
-const PhotoCardEliminate = ({ image, id, idUser,reloadFeeds   }) => {
+
+const PhotoCardEliminate = ({ image, id, idUser, reloadFeeds }) => {
   const navigation = useNavigation();
-  const isMediaVideo = isVideo(image?.uri || image);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
-  const [thumbnailUri, setThumbnailUri] = useState(null);
   const [showOptions, setShowOptions] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  useEffect(() => {
-    const generateThumbnail = async () => {
-      if (isMediaVideo) {
-        try {
-          setLoading(true);
-          const result = await createThumbnail({
-            url: image?.uri || image,
-          });
-          setThumbnailUri(result.path);
-          setLoading(false);
-        } catch (err) {
-          console.error('Error creando thumbnail:', err);
-          setError(true);
-          setLoading(false);
-        }
-      } else {
-        setLoading(false);
-      }
-    };
+  const mediaUri = image?.uri || image;
+  const thumbUri = image?.thumbnail || null;
+  const videoPost = thumbUri !== null;
+  const displayUri = videoPost ? thumbUri : mediaUri;
 
-    generateThumbnail();
-  }, [image]);
+  const showPlaceholder = !displayUri || error;
 
-  const showPlaceholder = !image || error;
+  const handleDelete = async () => {
+    try {
+     response=  await deleteHttps(`feed/${id}`);
 
-const handleDelete = async () => {
-  try {
-    await deleteHttps(`feed/${id}`);
-    setShowConfirm(false);
-    setShowOptions(false);
-    if (reloadFeeds) reloadFeeds(); // 🔁 Ejecuta la recarga desde Profile
-  } catch (err) {
-    console.error('Error deleting feed:', err);
-  }
-};
+      reloadFeeds?.();
+    } catch (err) {
+      console.error('Error deleting feed:', err);
+    } finally {
+      setShowConfirm(false);
+      setShowOptions(false);
+    }
+  };
 
   return (
     <TouchableOpacity onPress={() => navigation.navigate('Post', { id, idUser })}>
       <View style={styles.container}>
-        {/* Botón de tres puntos */}
+        {/* Botón de opciones */}
         <TouchableOpacity
-          onPress={() => setShowOptions(!showOptions)}
+          onPress={() => setShowOptions(prev => !prev)}
           style={styles.optionsButton}
         >
           <AntDesign name="ellipsis1" size={16} color="#333" />
@@ -81,14 +59,8 @@ const handleDelete = async () => {
             </View>
           ) : (
             <>
-              <Image
-                source={
-                  isMediaVideo
-                    ? { uri: thumbnailUri }
-                    : typeof image === 'string'
-                    ? { uri: image }
-                    : image
-                }
+              <FastImage
+                source={{ uri: displayUri }}
                 style={styles.image}
                 resizeMode="cover"
                 onLoadStart={() => setLoading(true)}
@@ -103,7 +75,7 @@ const handleDelete = async () => {
                   <ActivityIndicator size="small" color="#fff" />
                 </View>
               )}
-              {isMediaVideo && !loading && !error && (
+              {videoPost && !loading && !error && (
                 <View style={styles.playIcon}>
                   <AntDesign name="playcircleo" size={30} color="#fff" />
                 </View>
@@ -112,21 +84,19 @@ const handleDelete = async () => {
           )}
         </View>
 
-        {/* Menú de opciones */}
+        {/* Menú de eliminación */}
         {showOptions && (
-          <View style={styles.optionsMenu}>
+          <View style={styles.optionsMenuIcons}>
             <TouchableOpacity
-              onPress={() => {
-                setShowOptions(false);
-                setShowConfirm(true);
-              }}
+              onPress={() => setShowConfirm(true)}
+              style={styles.iconButton}
             >
-              <Text style={{ color: 'red', fontSize: 14 }}>Eliminar</Text>
+              <AntDesign name="delete" size={20} color="red" />
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Confirmación de eliminación */}
+        {/* Confirmación */}
         {showConfirm && (
           <View style={styles.confirmOverlay}>
             <View style={styles.confirmBox}>
@@ -150,7 +120,6 @@ const styles = StyleSheet.create({
     height: 120,
     padding: 1,
     margin: 1,
-    
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -187,32 +156,28 @@ const styles = StyleSheet.create({
   },
   optionsButton: {
     position: 'absolute',
-    top: 5,
+    top: 13,
     right: 15,
     zIndex: 10,
     backgroundColor: 'rgba(255,255,255,0.8)',
     padding: 4,
     borderRadius: 12,
   },
-  optionsMenu: {
+  optionsMenuIcons: {
     position: 'absolute',
-    top: 26,
+    top: 30,
     right: 6,
     backgroundColor: '#fff',
+    flexDirection: 'row',
+    borderRadius: 6,
     padding: 6,
-    borderRadius: 4,
     zIndex: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+  },
+  iconButton: {
+    marginHorizontal: 6,
   },
   confirmOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',

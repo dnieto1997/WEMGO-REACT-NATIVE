@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import Button from '../components/Button'
 import { COLORS, SIZES, icons } from '../constants'
 import { useNavigation } from '@react-navigation/native'
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const PhoneNumber = ({ navigation, route }) => {
   const { email } = route.params; 
@@ -109,10 +110,7 @@ const PhoneNumber = ({ navigation, route }) => {
             <TouchableOpacity 
               onPress={()=>navigation.goBack()}
               style={styles.headerIconContainer}>
-                <Image
-                  source={icons.back}
-                  style={styles.back}
-                />
+               <MaterialIcons name="arrow-back" size={24} color="black" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Phone Number</Text>
          </View>
@@ -123,11 +121,7 @@ const PhoneNumber = ({ navigation, route }) => {
               style={styles.selectFlagContainer}
               onPress={() => setModalVisible(true)}>
               <View style={{ justifyContent: "center" }}>
-                <Image
-                  source={icons.down}
-                  resizeMode='contain'
-                  style={styles.downIcon}
-                />
+              <MaterialIcons name="keyboard-arrow-down" size={24} color="#fff"  />
               </View>
               <View style={{ justifyContent: "center", marginLeft: 5 }}>
                 <Image

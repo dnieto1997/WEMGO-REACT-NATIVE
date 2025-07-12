@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-const BASE_URL = "http://192.168.1.12:3002/V1/";
+//const BASE_URL = "http://192.168.1.7:3004/V1/";
+const BASE_URL = "https://wemgo.online/wemgotest/";
 //const BASE_URL = "https://wemgo.online/wemgo/";
 
 
@@ -58,8 +59,14 @@ export const postHttps = async (url, body) => {
       },
     });
   } catch (error) {
+  if (error.response) {
+   
+    throw error.response.data;
+  } else {
+    // Otros errores de red o configuración
     throw error;
   }
+}
 };
 
 
@@ -88,9 +95,15 @@ export const postRegister = async (url, body) => {
         'Content-Type': 'multipart/form-data',
       },
     });
-  } catch (error) {
+  }catch (error) {
+  if (error.response) {
+   
+    throw error.response.data;
+  } else {
+    // Otros errores de red o configuración
     throw error;
   }
+}
 };
 
 export const patchHttps = async (url, body) => {

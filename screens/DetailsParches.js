@@ -69,6 +69,7 @@ const FIXED_HEIGHT = 450;
     setLoading(true);
     try {
       const response = await getHttps(`parches/${id}`);
+      console.log(response.data)
       setParche(response.data);
     } catch (error) {
       console.error(error);
@@ -370,8 +371,8 @@ const FIXED_HEIGHT = 450;
                   {member.first_name} {member.last_name}
                 </Text>
               </TouchableOpacity>
-
-              {/* Botón para el creador sacar a otros miembros */}
+          
+                   
               {dataUser.id === parche.user_created.id &&
                 member.id !== dataUser.id && (
                   <TouchableOpacity
@@ -392,6 +393,36 @@ const FIXED_HEIGHT = 450;
                 )}
             </View>
           ))}
+
+{dataUser.id === parche.user_created.id && parche.pendingMembers.length > 0 && (
+  <View style={{marginTop: 20}}>
+    <Text style={{color: '#fff', fontSize: 16, fontWeight: 'bold'}}>Invitaciones Enviadas</Text>
+    <Text style={{color: '#aaa', fontSize: 12, marginBottom: 10}}>
+      (Usuarios que aún no han aceptado)
+    </Text>
+
+    {parche.pendingMembers.map(member => (
+      <View key={member.id} style={styles.memberItem}>
+        <TouchableOpacity
+          style={{flexDirection: 'row', alignItems: 'center', flex: 1}}
+          onPress={() => navigation.navigate('FriendTimeline', {id: member.id})}
+        >
+          <MaterialIcons name="access-time" size={20} color="#aaa" style={{marginRight: 8}} />
+          <Image source={{uri: member.img}} style={styles.avatar} />
+          <Text style={styles.memberName}>
+            {member.first_name} {member.last_name}
+          </Text>
+        </TouchableOpacity>
+        <Text style={{color: '#888', fontSize: 12, marginLeft: 8}}>(Pendiente)</Text>
+      </View>
+    ))}
+  </View>
+)}
+
+      
+
+
+          
 
           {dataUser.id === parche.user_created.id && (
             <TouchableOpacity
@@ -573,6 +604,28 @@ const styles = StyleSheet.create({
   selected: {
     backgroundColor: '#333',
   },
+
+  memberItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingVertical: 10,
+  paddingHorizontal: 12,
+  backgroundColor: '#1a1a1a',
+  borderRadius: 10,
+  marginBottom: 8,
+},
+avatar: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  marginRight: 10,
+},
+memberName: {
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: '500',
+},
 
   searchContainer: {
     flexDirection: 'row',

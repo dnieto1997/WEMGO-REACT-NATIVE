@@ -33,6 +33,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import FastImage from 'react-native-fast-image';
 import VideoPost from '../components/VideoPost';
+import VideoThumbnail from '../components/VideoThumbnail ';
 
 const MessageDetails = ({navigation, route}) => {
   const {id} = route.params;
@@ -632,6 +633,7 @@ useEffect(() => {
                       ? 'Respondiste a su historia'
                       : 'Respondió a tu historia'}
                   </Text>
+                
                   <TouchableOpacity
                     onPress={() =>
                       navigation.navigate('ViewStories', {
@@ -650,20 +652,13 @@ useEffect(() => {
                         source={{uri: story.img}}
                         style={{width: 90, height: 130, borderRadius: 12}}
                       />
-                      {isVideoStory && (
-                        <View
-                          style={{
-                            position: 'absolute',
-                            top: '40%',
-                            left: '40%',
-                            backgroundColor: 'rgba(0,0,0,0.6)',
-                            borderRadius: 20,
-                            padding: 6,
-                          }}>
-                          <Text style={{color: 'white', fontSize: 18}}>▶</Text>
-                        </View>
-                      )}
+                   {isVideoStory && (
+ <VideoThumbnail uri={story.img} />
+)}
                     </View>
+                      <Text style={{color: 'white', fontSize: 14, fontStyle: 'italic',left:10}}>
+          {props.currentMessage.text}
+        </Text>
                   </TouchableOpacity>
                 </View>
               );

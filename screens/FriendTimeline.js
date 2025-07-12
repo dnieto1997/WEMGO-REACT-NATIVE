@@ -1,6 +1,6 @@
 // FriendTimeline.js final ensamblado y optimizado
-import React, { useContext, useEffect, useState  } from 'react';
-import { View,Share } from 'react-native';
+import React, { useContext, useEffect, useState } from 'react';
+import { View, Share } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getHttps } from '../api/axios';
 import { SocketContext } from '../context/SocketContext';
@@ -9,11 +9,11 @@ import HeaderProfile from '../components/HeaderProfile';
 import FeedGallery from '../components/FeedGallery';
 import ProfileModal from '../components/ProfileModal';
 import DescriptionModal from '../components/DescriptionModal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const FriendTimeline = ({ navigation, route }) => {
   const { id } = route.params;
-  const { socket,sendToggleNotification } = useContext(SocketContext);
-
+  const { socket, sendToggleNotification } = useContext(SocketContext);
   const [user, setUser] = useState({});
   const [feed, setFeed] = useState([]);
   const [DataUser, setDataUser] = useState({});
@@ -25,39 +25,39 @@ const FriendTimeline = ({ navigation, route }) => {
   const [refreshHeader, setRefreshHeader] = useState(0);
 
   useEffect(() => {
-  if (!socket) return;
+    if (!socket) return;
 
-  const triggerHeaderRefresh = () => {
-    setRefreshHeader(prev => prev + 1); // Forzar refresh
+    const triggerHeaderRefresh = () => {
+      setRefreshHeader(prev => prev + 1); // Forzar refresh
+    };
+
+    socket.on('receiveMessage', triggerHeaderRefresh);
+    socket.on('newComment', triggerHeaderRefresh);
+    socket.on('newFollow', triggerHeaderRefresh);
+    socket.on('sendInvitation', triggerHeaderRefresh);
+    socket.on('newFeed', triggerHeaderRefresh);
+    socket.on('newReaction', triggerHeaderRefresh);
+
+    return () => {
+      socket.off('receiveMessage', triggerHeaderRefresh);
+      socket.off('newComment', triggerHeaderRefresh);
+      socket.off('newFollow', triggerHeaderRefresh);
+      socket.off('sendInvitation', triggerHeaderRefresh);
+      socket.off('newFeed', triggerHeaderRefresh);
+      socket.off('newReaction', triggerHeaderRefresh);
+    };
+  }, [socket]);
+
+  const handleShareProfile = async () => {
+    try {
+      const { data } = await getHttps(`shortlink/generate?type=profile&id=${id}`);
+      await Share.share({
+        message: `Mira este perfil en Wemgo:\n${data.url}`,
+      });
+    } catch (err) {
+      console.error('Error al compartir perfil:', err);
+    }
   };
-
-  socket.on('receiveMessage', triggerHeaderRefresh);
-  socket.on('newComment', triggerHeaderRefresh);
-  socket.on('newFollow', triggerHeaderRefresh);
-  socket.on('sendInvitation', triggerHeaderRefresh);
-  socket.on('newFeed', triggerHeaderRefresh);
-  socket.on('newReaction', triggerHeaderRefresh);
-
-  return () => {
-    socket.off('receiveMessage', triggerHeaderRefresh);
-    socket.off('newComment', triggerHeaderRefresh);
-    socket.off('newFollow', triggerHeaderRefresh);
-    socket.off('sendInvitation', triggerHeaderRefresh);
-    socket.off('newFeed', triggerHeaderRefresh);
-    socket.off('newReaction', triggerHeaderRefresh);
-  };
-}, [socket]);
-
-const handleShareProfile = async () => {
-  try {
-    const { data } = await getHttps(`shortlink/generate?type=profile&id=${id}`);
-    await Share.share({
-      message: `Mira este perfil en Wemgo:\n${data.url}`,
-    });
-  } catch (err) {
-    console.error('Error al compartir perfil:', err);
-  }
-};
   const handleFollow = async () => {
     try {
       const response = await getHttps(`followers/toggle/${id}`);
@@ -81,7 +81,7 @@ const handleShareProfile = async () => {
           getHttps(`feed/search/${id}`),
           getHttps(`followers/status/${id}`),
         ]);
-
+        console.log(feedRes.data.length);
         setUser(userRes.data);
         setFollowers(followRes.data.followers);
         setFollowing(followRes.data.following);
@@ -97,19 +97,22 @@ const handleShareProfile = async () => {
     loadAllData();
   }, [id]);
 
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#200f39' }}>
+    <View style={{ flex: 1, backgroundColor: '#200f39', paddingTop: insets.top }}>
       <HeaderProfile
         user={user}
         isFollowing={isFollowing}
         Followers={Followers}
         Following={Following}
+        countFeed={feed.length}
         onFollow={handleFollow}
         onOpenImage={() => setModalVisible(true)}
         navigation={navigation}
         userId={id}
-         onRefresh={refreshHeader}
-           onShare={handleShareProfile}
+        onRefresh={refreshHeader}
+        onShare={handleShareProfile}
       />
 
       <FeedGallery feed={feed} userId={id} />

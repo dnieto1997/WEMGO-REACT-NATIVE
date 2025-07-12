@@ -22,12 +22,12 @@ import HeaderHome from '../components/HeaderHome';
 import StoriesList from '../components/StoriesList';
 import CommentItem from '../components/CommentItem';
 import Likes from '../components/Likes';
-import ImageViewerModal from '../components/ModalImage';
 import FeedCard from '../components/FeedCard';
 import {COLORS} from '../constants';
 import EventCard from '../components/EventCard';
 import UserGreetingCard from '../components/UserGreetingCard';
 import Adds from '../components/Adds';
+import ImageViewerModal from '../components/ModalImage';
 
 const HomeV1 = ({navigation, route}) => {
   const [feeds, setFeeds] = useState([]);
@@ -54,10 +54,9 @@ const HomeV1 = ({navigation, route}) => {
   const [followedIds, setFollowedIds] = useState([]);
   const flatListRef = useRef(null);
   const [ads, setAds] = useState(null);
-  const {socket,sendReactionNotification, sendToggleNotification} =
+  const {socket, sendReactionNotification, sendToggleNotification} =
     useContext(SocketContext);
-    const [unreadCountNotifications, setUnreadCountNotifications] = useState(0);
-    
+  const [unreadCountNotifications, setUnreadCountNotifications] = useState(0);
 
   useEffect(() => {
     if (route?.params?.refresh) {
@@ -74,84 +73,102 @@ const HomeV1 = ({navigation, route}) => {
     if (data) setDataUser(JSON.parse(data));
   }, []);
 
-const fetchFeeds = useCallback(
-  async (newPage = 1) => {
-    try {
-      const { data: feedsData } = await getHttps(`feed?page=${newPage}&limit=5`);
-      const feedsArray = Array.isArray(feedsData) ? feedsData : [];
+  const fetchFeeds = useCallback(
+    async (newPage = 1) => {
+      try {
+        const {data: feedsData} = await getHttps(
+          `feed?page=${newPage}&limit=5`,
+        );
 
-      let combined = [...feedsArray];
+  
+        const feedsArray = Array.isArray(feedsData) ? feedsData : [];
 
-      if (feedsArray.length > 0) {
-        const { data: adsData } = await getHttps(`event/publicidad`);
-        if (Array.isArray(adsData) && adsData.length > 0) {
-          const ad = { ...adsData[0], isAd: true };
-          try {
-            const parsedImg = JSON.parse(ad.img || '[]');
-            if (Array.isArray(parsedImg) && parsedImg.length > 0 && parsedImg[0]) {
-              combined.push(ad);
+        let combined = [...feedsArray];
+
+        if (feedsArray.length > 0) {
+          const {data: adsData} = await getHttps(`event/publicidad`);
+          if (Array.isArray(adsData) && adsData.length > 0) {
+            const ad = {...adsData[0], isAd: true};
+            try {
+              const parsedImg = JSON.parse(ad.img || '[]');
+              if (
+                Array.isArray(parsedImg) &&
+                parsedImg.length > 0 &&
+                parsedImg[0]
+              ) {
+                combined.push(ad);
+              }
+            } catch (e) {
+              console.warn('Publicidad inválida:', e);
             }
-          } catch (e) {
-            console.warn('Publicidad inválida:', e);
           }
         }
+
+        if (newPage === 1) {
+          setFeeds(combined);
+        } else {
+          setFeeds(prev => [...prev, ...combined]);
+        }
+
+        return feedsArray.length;
+      } catch (err) {
+        console.error('Error al cargar feeds o publicidad:', err);
+        if (err?.response?.status === 401) navigation.navigate('Login');
+        return 0;
+      } finally {
+        setRefreshing(false);
+        setIsLoadingMore(false);
       }
+    },
+    [navigation],
+  );
 
-      if (newPage === 1) {
-        setFeeds(combined);
-      } else {
-        setFeeds(prev => [...prev, ...combined]);
-      }
-
-      return feedsArray.length;
-    } catch (err) {
-      console.error('Error al cargar feeds o publicidad:', err);
-      if (err?.response?.status === 401) navigation.navigate('Login');
-      return 0;
-    } finally {
-      setRefreshing(false);
-      setIsLoadingMore(false);
-    }
-  },
-  [navigation]
-);
-
-
-
-const fetchAds = useCallback(async () => {
-  try {
-    const { data: adsData } = await getHttps(`event/publicidad`);
-    
-    if (Array.isArray(adsData) && adsData.length > 0) {
-      const ad = { ...adsData[0], isAd: true };
-      setAds(ad); 
-    } else {
-      setAds(null);
-    }
-  } catch (err) {
-    console.error('Error al cargar publicidad:', err);
-  }
-}, []);
-
-
-  const fetchStories = useCallback(async () => {
-    if (!DataUser.id) return;
+  const fetchAds = useCallback(async () => {
     try {
-      const response = await getHttps(`stories/find/${DataUser.id}`);
-      const storiesData = Array.isArray(response.data) ? response.data : [];
-      const formattedStories = storiesData.map(userItem => ({
-        user: userItem.user,
-        stories: userItem.stories.map(story => ({
-          ...story,
-          storyUrl: userItem.user?.img,
-          isLoading: false,
-        })),
-      }));
-      setStories(formattedStories);
-    } catch (error) {
-      console.error('Error fetching stories:', error);
+      const {data: adsData} = await getHttps(`event/publicidad`);
+      
+
+      if (Array.isArray(adsData) && adsData.length > 0) {
+        const ad = {...adsData[0], isAd: true};
+        setAds(ad);
+      } else {
+        setAds(null);
+      }
+    } catch (err) {
+      console.error('Error al cargar publicidad:', err);
     }
-  }, [DataUser.id]);
+  }, []);
+
+const fetchStories = useCallback(async () => {
+  if (!DataUser.id) return;
+  try {
+    const response = await getHttps(`stories/findHome/${DataUser.id}`);
+    const storiesData = Array.isArray(response.data) ? response.data : [];
+
+    // 🔁 Ordenar: los no vistos primero (viewAllStories: false), luego los vistos
+    const sortedStories = storiesData.sort((a, b) => {
+      if (a.viewAllStories === b.viewAllStories) return 0;
+      return a.viewAllStories ? 1 : -1;
+    });
+
+    // 👉 Mapear con estructura deseada
+    const formattedStories = sortedStories.map(userItem => ({
+      user: userItem.user,
+      viewAllStories: userItem.viewAllStories,
+      stories: userItem.stories.map(story => ({
+        ...story,
+        storyUrl: userItem.user?.img,
+        isLoading: false,
+      })),
+    }));
+
+    setStories(formattedStories);
+  } catch (error) {
+    console.error('Error fetching stories:', error);
+  }
+}, [DataUser.id]);
+
+
 
   const handleFollow = async id => {
     try {
@@ -164,7 +181,6 @@ const fetchAds = useCallback(async () => {
       console.error('Error following/unfollowing user:', error);
     }
   };
-
 
   const handleClick = async idFeed => {
     if (likeLoading[idFeed]) return;
@@ -199,67 +215,65 @@ const fetchAds = useCallback(async () => {
     }
   };
 
-
   const fetchUnreadConversations = async () => {
-      try {
-        const {data} = await getHttps('chat/conversation');
-  
-        setUnreadCount(data);
-      } catch (error) {
-        console.error('Error fetching unread conversations:', error);
-      }
+    try {
+      const {data} = await getHttps('chat/conversation');
+
+      setUnreadCount(data);
+    } catch (error) {
+      console.error('Error fetching unread conversations:', error);
+    }
+  };
+
+  const fetchUnreadNotifications = async () => {
+    try {
+      const {data} = await getHttps('notification/isRead');
+
+      setUnreadCountNotifications(data);
+    } catch (error) {
+      console.error('Error fetching unread conversations:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const consumeNotificationApi = () => {
+      fetchUnreadNotifications(); // ✅ esta es la importante
     };
-  
-    const fetchUnreadNotifications = async () => {
-      try {
-        const {data} = await getHttps('notification/isRead');
-  
-        setUnreadCountNotifications(data);
-      } catch (error) {
-        console.error('Error fetching unread conversations:', error);
-      }
+
+    socket.on('newCommentEvent', consumeNotificationApi);
+    socket.on('newComment', consumeNotificationApi);
+    socket.on('newFollow', consumeNotificationApi);
+    socket.on('sendInvitation', consumeNotificationApi);
+    socket.on('newFeed', consumeNotificationApi);
+    socket.on('newReactionStory', consumeNotificationApi);
+    socket.on('newReaction', consumeNotificationApi);
+
+    return () => {
+      socket.off('newCommentEvent', consumeNotificationApi);
+      socket.off('newComment', consumeNotificationApi);
+      socket.off('newFollow', consumeNotificationApi);
+      socket.off('sendInvitation', consumeNotificationApi);
+      socket.off('newFeed', consumeNotificationApi);
+      socket.off('newReactionStory', consumeNotificationApi);
+      socket.off('newReaction', consumeNotificationApi);
     };
-  
-    useEffect(() => {
-      if (!socket) return;
-  
-      const consumeNotificationApi = () => {
-        fetchUnreadNotifications(); // ✅ esta es la importante
-      };
-  
-      socket.on('newCommentEvent', consumeNotificationApi);
-      socket.on('newComment', consumeNotificationApi);
-      socket.on('newFollow', consumeNotificationApi);
-      socket.on('sendInvitation', consumeNotificationApi);
-      socket.on('newFeed', consumeNotificationApi);
-      socket.on('newReactionStory', consumeNotificationApi);
-      socket.on('newReaction', consumeNotificationApi);
-  
-      return () => {
-        socket.off('newCommentEvent', consumeNotificationApi);
-        socket.off('newComment', consumeNotificationApi);
-        socket.off('newFollow', consumeNotificationApi);
-        socket.off('sendInvitation', consumeNotificationApi);
-        socket.off('newFeed', consumeNotificationApi);
-        socket.off('newReactionStory', consumeNotificationApi);
-        socket.off('newReaction', consumeNotificationApi);
-      };
-    }, [socket]);
-  
-    useEffect(() => {
-      if (!socket) return;
-  
-      const handleReceiveMessage = () => {
-        fetchUnreadConversations();
-      };
-  
-      socket.on('receiveMessage', handleReceiveMessage);
-  
-      return () => {
-        socket.off('receiveMessage', handleReceiveMessage);
-      };
-    }, [socket]);
-  
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleReceiveMessage = () => {
+      fetchUnreadConversations();
+    };
+
+    socket.on('receiveMessage', handleReceiveMessage);
+
+    return () => {
+      socket.off('receiveMessage', handleReceiveMessage);
+    };
+  }, [socket]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -267,23 +281,23 @@ const fetchAds = useCallback(async () => {
     setHasMoreFeeds(true);
     await fetchFeeds(1);
     await fetchStories();
-      await fetchAds();
-      await fetchUnreadConversations()
-      await fetchUnreadNotifications()
+    await fetchAds();
+    await fetchUnreadConversations();
+    await fetchUnreadNotifications();
   };
 
-const handleLoadMore = async () => {
-  if (isLoadingMore || refreshing || !hasMoreFeeds) return;
-  setIsLoadingMore(true);
-  const nextPage = page + 1;
-  const count = await fetchFeeds(nextPage);
-  if (count > 0) {
-    setPage(nextPage);
-  }
-  if (count < 5) {
-    setHasMoreFeeds(false);
-  }
-};
+  const handleLoadMore = async () => {
+    if (isLoadingMore || refreshing || !hasMoreFeeds) return;
+    setIsLoadingMore(true);
+    const nextPage = page + 1;
+    const count = await fetchFeeds(nextPage);
+    if (count > 0) {
+      setPage(nextPage);
+    }
+    if (count < 5) {
+      setHasMoreFeeds(false);
+    }
+  };
   const handleDelete = async () => {
     if (!feedToDelete) return;
     try {
@@ -324,63 +338,63 @@ const handleLoadMore = async () => {
     }
   }).current;
 
-useFocusEffect(
-  useCallback(() => {
-    loadUserData();
-    fetchFeeds();
-    fetchStories();
-    fetchAds(); // ← siempre se actualiza la publicidad
-      fetchUnreadConversations()
-       fetchUnreadNotifications()
-  }, [loadUserData, fetchFeeds, fetchStories, fetchAds])
-);
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+      fetchFeeds();
+      fetchStories();
+      fetchAds(); // ← siempre se actualiza la publicidad
+      fetchUnreadConversations();
+      fetchUnreadNotifications();
+    }, [loadUserData, fetchFeeds, fetchStories, fetchAds]),
+  );
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: '#000'}}>
       <FlatList
         ref={flatListRef}
         data={feeds}
-keyExtractor={(item, index) => {
-  const baseId = item.feed_id ?? item.id ?? `unknown-${index}`;
-  const type = item.feed_id ? 'feed' : item.id ? 'event' : 'unknown';
-  return `${type}-${baseId}-${index}`;
-}}
-      renderItem={({ item }) => (
-  item.isAd ? (
-          <EventCard event={item} navigation={navigation} />
-  ) : (
-    <FeedCard
-      feed={item}
-      DataUser={DataUser}
-      followedIds={followedIds}
-      navigation={navigation}
-      handleFollow={handleFollow}
-      handleClick={handleClick}
-      toggleOptions={toggleOptions}
-      showOptionsId={showOptionsId}
-      setShowOptionsId={setShowOptionsId}
-      setFeedToDelete={setFeedToDelete}
-      setShowDeleteConfirm={setShowDeleteConfirm}
-      feedToDelete={feedToDelete}
-      showDeleteConfirm={showDeleteConfirm}
-      likeLoading={likeLoading}
-      setCurrentImages={setCurrentImages}
-      setImageIndex={setImageIndex}
-      setImageViewVisible={setImageViewVisible}
-      setUserFeedId={setUserFeedId}
-      setCurrentFeedId={setCurrentFeedId}
-      setModalVisible={setModalVisible}
-      setModalVisible2={setModalVisible2}
-      timeAgo={timeAgo}
-      showFullDescription={showFullDescription}
-      setShowFullDescription={setShowFullDescription}
-      visibleFeedId={visibleFeedId}
-      isScreenFocused={true}
-    />
-  )
-)}
+        keyExtractor={(item, index) => {
+          const baseId = item.feed_id ?? item.id ?? `unknown-${index}`;
+          const type = item.feed_id ? 'feed' : item.id ? 'event' : 'unknown';
+          return `${type}-${baseId}-${index}`;
+        }}
+        renderItem={({item}) =>
+          item.isAd ? (
+            <EventCard event={item} navigation={navigation} />
+          ) : (
+            <FeedCard
+              feed={item}
+              DataUser={DataUser}
+              followedIds={followedIds}
+              navigation={navigation}
+              handleFollow={handleFollow}
+              handleClick={handleClick}
+              toggleOptions={toggleOptions}
+              showOptionsId={showOptionsId}
+              setShowOptionsId={setShowOptionsId}
+              setFeedToDelete={setFeedToDelete}
+              setShowDeleteConfirm={setShowDeleteConfirm}
+              feedToDelete={feedToDelete}
+              showDeleteConfirm={showDeleteConfirm}
+              likeLoading={likeLoading}
+              setCurrentImages={setCurrentImages}
+              setImageIndex={setImageIndex}
+              setImageViewVisible={setImageViewVisible}
+              setUserFeedId={setUserFeedId}
+              setCurrentFeedId={setCurrentFeedId}
+              setModalVisible={setModalVisible}
+              setModalVisible2={setModalVisible2}
+              timeAgo={timeAgo}
+              showFullDescription={showFullDescription}
+              setShowFullDescription={setShowFullDescription}
+              visibleFeedId={visibleFeedId}
+              isScreenFocused={true}
+              isModalVisible={isImageViewVisible}
+            />
+          )
+        }
         ListHeaderComponent={() => (
           <>
-
             <HeaderHome
               navigation={navigation}
               unreadCount={unreadCount}
@@ -400,15 +414,11 @@ keyExtractor={(item, index) => {
               User={{}}
             />
 
-             {ads && (
-  <Adds event={ads} navigation={navigation} />
-)}
+            {ads && <Adds event={ads} navigation={navigation} />}
 
             <Text style={styles.viewhistory}>
               <Text style={styles.history}>Lo que está pasando hoy</Text>
             </Text>
-
-      
           </>
         )}
         ListEmptyComponent={() =>
@@ -452,12 +462,12 @@ keyExtractor={(item, index) => {
         onClose={() => setModalVisible2(false)}
       />
 
-      <ImageViewerModal
+{/*     <ImageViewerModal
         visible={isImageViewVisible}
         images={currentImages}
         index={imageIndex}
         onClose={() => setImageViewVisible(false)}
-      />
+      />  */}
     </SafeAreaView>
   );
 };

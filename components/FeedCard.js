@@ -1,4 +1,4 @@
-import React, {useState, useContext} from 'react';
+import React, {useState, useContext, useEffect, useRef} from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,13 @@ import {
   Dimensions,
   StyleSheet,
   ActivityIndicator,
-  Share
+  Share,
 } from 'react-native';
 import FastImage from 'react-native-fast-image';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import Entypo from 'react-native-vector-icons/Entypo';
-import VideoPost from './VideoPost';
-import {SocketContext} from '../context/SocketContext';
 import MediaCarousel from './MediaCarousel';
-import { getHttps } from '../api/axios';
+import {getHttps, postHttps} from '../api/axios';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const {width: windowWidth} = Dimensions.get('window');
@@ -50,8 +47,12 @@ const FeedCard = React.memo(
     timeAgo,
     showFullDescription,
     setShowFullDescription,
+    visibleFeedId, 
+    isModalVisible
+   
   }) => {
     let images = [];
+    let thumbnails = [];
     if (feed.feed_img) {
       try {
         images = Array.isArray(feed.feed_img)
@@ -62,12 +63,53 @@ const FeedCard = React.memo(
       }
     }
 
+  
+       if (feed.feed_thumbnail) {
+      try {
+        thumbnails = Array.isArray(feed.feed_thumbnail)
+          ? feed.feed_thumbnail
+          : JSON.parse(feed.feed_thumbnail);
+      } catch (error) {
+        thumbnails = [];
+      }
+    }
+  
+    const hasSentView = useRef(false);
+   useEffect(() => {
+  if (feed.feed_isVideo !== "1" && feed.feed_isVideo !== 1) return;
+
+  const shouldSendView =
+    visibleFeedId === feed.feed_id && !hasSentView.current;
+
+  if (shouldSendView) {
+    const sendView = async () => {
+      try {
+      await postHttps('video-views', {
+          feedid: feed.feed_id,
+          user: DataUser.id,
+        });
+
+        hasSentView.current = true;
+      } catch (err) {
+        console.log(err);
+      }
+    };
+
+    sendView();
+  }
+
+  // Reset si pierde foco para permitir nuevo envío
+  if (visibleFeedId !== feed.feed_id) {
+    hasSentView.current = false;
+  }
+}, [visibleFeedId, feed.feed_id, DataUser.id, feed.isVideo]);
+
     const handleShareProfile = async () => {
       try {
         const {data} = await getHttps(
           `shortlink/generate?type=feed&id=${feed.feed_id}`,
         );
-       
+
         await Share.share({
           message: `Mira esta Publicacion en Wemgo:\n${data.url}`,
         });
@@ -133,12 +175,14 @@ const FeedCard = React.memo(
           <View style={styles.imageContainer}>
             <MediaCarousel
               images={images}
+              thumbnails={thumbnails}
               feedId={feed.feed_id}
-              visibleFeedId={feed.feed_id} // o visibleFeedId si lo pasas como prop
+              visibleFeedId={visibleFeedId}
               isScreenFocused={true} // o pásalo desde props
               setCurrentImages={setCurrentImages}
               setImageIndex={setImageIndex}
               setImageViewVisible={setImageViewVisible}
+                isModalVisible={isModalVisible}
             />
           </View>
         </View>
@@ -180,11 +224,7 @@ const FeedCard = React.memo(
               handleShareProfile();
             }}
             style={styles.commentContainer}>
-            <Ionicons
-              name="share-social-outline"
-              size={30}
-              color="white"
-            />
+            <Ionicons name="share-social-outline" size={30} color="white" />
           </TouchableOpacity>
         </View>
 

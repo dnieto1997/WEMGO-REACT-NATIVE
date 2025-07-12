@@ -17,6 +17,7 @@ import {
   GestureDetector,
   Gesture,
 } from 'react-native-gesture-handler';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const ImageViewerModal = ({ visible, onClose, images, index }) => {
   const screenWidth = Dimensions.get('window').width;
@@ -203,21 +204,25 @@ const ImageViewerModal = ({ visible, onClose, images, index }) => {
         />
 
         <TouchableOpacity
-          onPress={() => {
-            pan.setValue({ x: 0, y: 0 });
-            onClose();
-          }}
+      onPress={() => {
+  pan.setValue({ x: 0, y: 0 });
+  setTimeout(() => {
+    onClose(); // actualiza isModalVisible = false después del cierre visual
+  }, 150); // delay suficiente para reiniciar el estado y evitar que se pause el video
+}}
           style={{
             position: 'absolute',
             top: Platform.OS === 'ios' ? 60 : 40,
             right: 20,
             backgroundColor: 'rgba(0,0,0,0.5)',
             padding: 10,
-            borderRadius: 20,
+            borderRadius: 50,
             zIndex: 10,
+            width:50,
+            height:50
           }}
         >
-          <Text style={{ color: '#fff', fontSize: 16 }}>✕</Text>
+          <MaterialIcons name="close" size={30} color="red" />
         </TouchableOpacity>
       </View>
     </Modal>

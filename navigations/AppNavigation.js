@@ -11,21 +11,18 @@ import {SocketContext} from '../context/SocketContext';
 
 // Importa tus screens
 import {
-  AddNewCard,
   Call,
   AddStory,
   ChangePassword,
   CreateEvent,
   CreateEventV2,
   CreatePassword,
-  Dashboard,
   Earning,
   EventDetails,
   EventGoing,
   EventsYouJoined,
   FavouriteEvent,
   FeaturedEvents,
-  FindFriends,
   Followers,
   ForgetPassword,
   ForgetPasswordEmailCode,
@@ -34,20 +31,17 @@ import {
   GroupVideoCall,
   Interests,
   Login,
-  Menbership,
   MessageDetails,
-  MessageV1,
   MessageV2,
   OTPVerification,
   Onboarding,
   Onboarding2,
   Onboarding3,
-  PaymentMethod,
+ 
   PaymentSuccessful,
   PhoneNumber,
   Profile,
   ProfileDetails,
-  ReferAndEarn,
   Review,
   SearchEvent,
   SearchLocation,
@@ -87,7 +81,6 @@ const AppNavigation = () => {
   const [isFirstLaunch, setIsFirstLaunch] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-
 
   useEffect(() => {
     const checkAppStatus = async () => {
@@ -132,8 +125,6 @@ const AppNavigation = () => {
     initialRoute = 'Login';
   }
 
-
-
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
@@ -147,42 +138,44 @@ const AppNavigation = () => {
         <Stack.Screen name="Post" component={Post} />
         <Stack.Screen name="CreateEventV2" component={CreateEventV2} />
         <Stack.Screen name="CreatePassword" component={CreatePassword} />
-        <Stack.Screen name="Dashboard" component={Dashboard} />
-        <Stack.Screen name="Earning" component={Earning} />
+
         <Stack.Screen name="EventDetails" component={EventDetails} />
         <Stack.Screen name="Notifications" component={Notifications} />
-        <Stack.Screen name="FindFriends" component={FindFriends} />
+
         <Stack.Screen name="Followers" component={Followers} />
         <Stack.Screen name="ForgetPassword" component={ForgetPassword} />
-         <Stack.Screen name="PublicPatchScreen" component={PublicPatchScreen} />
-          <Stack.Screen name="PrivatePatchScreen" component={PrivatePatchScreen} />
-           <Stack.Screen name="DetailsParches" component={DetailsParches} />
-             <Stack.Screen name="ChatParche" component={ChatParche} />
-               <Stack.Screen name="AddPublicParche" component={AddPublicParche} />
+        <Stack.Screen name="PublicPatchScreen" component={PublicPatchScreen} />
+        <Stack.Screen
+          name="PrivatePatchScreen"
+          component={PrivatePatchScreen}
+        />
+        <Stack.Screen name="DetailsParches" component={DetailsParches} />
+        <Stack.Screen name="ChatParche" component={ChatParche} />
+        <Stack.Screen name="AddPublicParche" component={AddPublicParche} />
         <Stack.Screen
           name="ForgetPasswordEmailCode"
           component={ForgetPasswordEmailCode}
         />
-         <Stack.Screen name="Parches" component={Parches} />
+        <Stack.Screen name="Parches" component={Parches} />
         <Stack.Screen name="FriendTimeline" component={FriendTimeline} />
         <Stack.Screen name="Gender" component={Gender} />
         <Stack.Screen name="GroupVideoCall" component={GroupVideoCall} />
         <Stack.Screen name="Interests" component={Interests} />
 
         <Stack.Screen name="Login" component={Login} />
-        <Stack.Screen name="Menbership" component={Menbership} />
+
         <Stack.Screen name="PrivacySettings" component={PrivacySettings} />
         <Stack.Screen name="MessageDetails" component={MessageDetails} />
         <Stack.Screen name="Message" component={MessageV2} />
         <Stack.Screen name="Onboarding" component={Onboarding} />
         <Stack.Screen name="OTPVerification" component={OTPVerification} />
         <Stack.Screen name="OTPVerification2" component={OTPVerification2} />
-        <Stack.Screen name="PaymentMethod" component={PaymentMethod} />
+       
         <Stack.Screen name="PaymentSuccessful" component={PaymentSuccessful} />
         <Stack.Screen name="PhoneNumber" component={PhoneNumber} />
         <Stack.Screen name="Profile" component={Profile} />
         <Stack.Screen name="ProfileDetails" component={ProfileDetails} />
-        <Stack.Screen name="ReferAndEarn" component={ReferAndEarn} />
+
         <Stack.Screen name="Review" component={Review} />
         <Stack.Screen name="SearchEvent" component={SearchEvent} />
         <Stack.Screen name="SearchLocation" component={SearchLocation} />
@@ -210,7 +203,7 @@ const AppNavigation = () => {
         <Stack.Screen name="EventsYouJoined" component={EventsYouJoined} />
         <Stack.Screen name="FavouriteEvent" component={FavouriteEvent} />
         <Stack.Screen name="EventGoing" component={EventGoing} />
-        <Stack.Screen name="AddNewCard" component={AddNewCard} />
+
         <Stack.Screen name="EditFeed" component={EditFeed} />
         <Stack.Screen name="EditEvent" component={EditEvent} />
         <Stack.Screen name="Following" component={Following} />

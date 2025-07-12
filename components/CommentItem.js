@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useContext,useRef} from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,13 +10,14 @@ import {
   TouchableWithoutFeedback,
   Image,
   Keyboard,
+  KeyboardAvoidingView
 } from 'react-native';
-import {COLORS} from '../constants';
-import {deleteHttps, getHttps, patchHttps, postHttps} from '../api/axios';
+import { COLORS } from '../constants';
+import { deleteHttps, getHttps, patchHttps, postHttps } from '../api/axios';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {useNavigation, useFocusEffect} from '@react-navigation/native';
-import {SocketContext} from '../context/SocketContext';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { SocketContext } from '../context/SocketContext';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const CommentItem = ({
@@ -32,6 +33,7 @@ const CommentItem = ({
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
+  const [expandedReplies, setExpandedReplies] = useState({}); // { [commentId]: true/false }
   const [newReply, setNewReply] = useState('');
   const [selectedComment, setSelectedComment] = useState(null);
   const [replyModalVisible, setReplyModalVisible] = useState(false);
@@ -42,19 +44,20 @@ const CommentItem = ({
   const [editCommentText, setEditCommentText] = useState('');
   const [likecomment, setLikecomment] = useState(false);
   const [likereply, setLikereply] = useState(false);
-const [isSendingComment, setIsSendingComment] = useState(false);
-const [showSuggestions, setShowSuggestions] = useState(false);
-const [suggestions, setSuggestions] = useState([]);
-const [mentionQuery, setMentionQuery] = useState('');
-const [mentionStart, setMentionStart] = useState(-1);
-const [mentionObj, setMentionObj] = useState(null);
- const [keyboardHeight, setKeyboardHeight] = useState(0);
- const flatListRef = React.useRef(null);
- const [mentionList, setMentionList] = useState([]);
+  const [isSendingComment, setIsSendingComment] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [statusLikeComment, setStatusLikeComment] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionStart, setMentionStart] = useState(-1);
+  const [mentionObj, setMentionObj] = useState(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const flatListRef = React.useRef(null);
+  const [mentionList, setMentionList] = useState([]);
 
 
 
-  const {sendCommentNotification, listenForCommentNotifications} =
+  const { sendCommentNotification, listenForCommentNotifications } =
     useContext(SocketContext); // Integrar sockets
 
 
@@ -97,25 +100,25 @@ const [mentionObj, setMentionObj] = useState(null);
       }
     };
 
-    listenForCommentNotifications(() => {});
+    listenForCommentNotifications(() => { });
     listenForCommentNotifications(handleNewComment);
 
     return () => {
-      listenForCommentNotifications(() => {}); // Desuscribirse al desmontar
+      listenForCommentNotifications(() => { }); // Desuscribirse al desmontar
     };
   }, [isVisible]);
 
 
-useEffect(() => {
-  if (isVisible && focusCommentId && comments.length > 0) {
-    const index = comments.findIndex(c => c.commentId === focusCommentId);
-    if (index !== -1 && flatListRef.current) {
-      setTimeout(() => {
-        flatListRef.current.scrollToIndex({ index, animated: true });
-      }, 300);
+  useEffect(() => {
+    if (isVisible && focusCommentId && comments.length > 0) {
+      const index = comments.findIndex(c => c.commentId === focusCommentId);
+      if (index !== -1 && flatListRef.current) {
+        setTimeout(() => {
+          flatListRef.current.scrollToIndex({ index, animated: true });
+        }, 300);
+      }
     }
-  }
-}, [isVisible, focusCommentId, comments]);
+  }, [isVisible, focusCommentId, comments]);
 
   const editReply = reply => {
     setEditingReply(reply.replyId);
@@ -124,13 +127,13 @@ useEffect(() => {
 
   const saveEditedReply = async replyId => {
     try {
-      await patchHttps(`w-reply/${replyId}`, {reply: editReplyText});
+      await patchHttps(`w-reply/${replyId}`, { reply: editReplyText });
       setEditingReply(null);
       fetchComments();
       setSelectedComment(prev => ({
         ...prev,
         replies: prev.replies.map(r =>
-          r.replyId == replyId ? {...r, replyText: editReplyText} : r,
+          r.replyId == replyId ? { ...r, replyText: editReplyText } : r,
         ),
       }));
     } catch (error) {
@@ -147,22 +150,22 @@ useEffect(() => {
   };
 
   const fetchMentionUsers = async (query) => {
-  try {
-    if (!query) return [];
-    const res = await getHttps(`users/search/${query}`);
-    return res.data.map(u => ({
-      id: u.id,
-      name: `${u.first_name} ${u.last_name}`,
-    }));
-  } catch {
-    return [];
-  }
-};
+    try {
+      if (!query) return [];
+      const res = await getHttps(`users/search/${query}`);
+      return res.data.map(u => ({
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+      }));
+    } catch {
+      return [];
+    }
+  };
 
   const fetchComments = async () => {
     try {
       const response = await getHttps(`comments/find/${feedId}`);
-  
+      console.log('Comentarios obtenidos:', response.data[0].replies);
       setComments(response.data);
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -170,65 +173,65 @@ useEffect(() => {
   };
 
   const extractMentions = async (text) => {
-  const mentionRegex = /@([\w\s]+)/g;
-  const mentions = [...text.matchAll(mentionRegex)].map(m => m[1].trim());
+    const mentionRegex = /@([\w\s]+)/g;
+    const mentions = [...text.matchAll(mentionRegex)].map(m => m[1].trim());
 
-  const res = await Promise.all(
-    mentions.map(async (name) => {
-      const searchRes = await getHttps(`users/search/${name}`);
-      const foundUser = searchRes.data.find(u =>
-        `${u.first_name} ${u.last_name}`.toLowerCase() === name.toLowerCase()
-      );
-      return foundUser ? { id: foundUser.id, name: `@${name}` } : null;
-    })
-  );
+    const res = await Promise.all(
+      mentions.map(async (name) => {
+        const searchRes = await getHttps(`users/search/${name}`);
+        const foundUser = searchRes.data.find(u =>
+          `${u.first_name} ${u.last_name}`.toLowerCase() === name.toLowerCase()
+        );
+        return foundUser ? { id: foundUser.id, name: `@${name}` } : null;
+      })
+    );
 
-  return res.filter(Boolean); // eliminar nulls
-};
+    return res.filter(Boolean); // eliminar nulls
+  };
 
-const addComment = async () => {
-  if (!newComment.trim()) return;
-  setIsSendingComment(true);
+  const addComment = async () => {
+    if (!newComment.trim()) return;
+    setIsSendingComment(true);
 
-  try {
-    const id_user_mention = mentionList.map(m => m.id);
-    const user_mention = mentionList.map(m => m.name);
+    try {
+      const id_user_mention = mentionList.map(m => m.id);
+      const user_mention = mentionList.map(m => m.name);
 
-    const payload={
- id_feed: feedId,
-      comments: newComment,
-      id_user_mention: JSON.stringify(id_user_mention),
-      user_mention: JSON.stringify(user_mention),
+      const payload = {
+        id_feed: feedId,
+        comments: newComment,
+        id_user_mention: JSON.stringify(id_user_mention),
+        user_mention: JSON.stringify(user_mention),
+      }
+
+
+
+      const response = await postHttps('comments', payload);
+
+      const newCommentData = {
+        commentId: response.data.id,
+        commentText: newComment,
+        userId: DataUser.id,
+        userFirstName: DataUser.firstName,
+        userLastName: DataUser.lastName,
+        feedId: feedId,
+        idUserMention: id_user_mention,
+        userMention: user_mention,
+      };
+
+      sendCommentNotification(newCommentData);
+
+      setComments(prev => [...prev, newCommentData]);
+      setNewComment('');
+      setMentionList([]); // reset
+      setShowSuggestions(false);
+      onCommentAdded();
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    } finally {
+      setIsSendingComment(false);
     }
-
-
-
-    const response = await postHttps('comments', payload);
-
-    const newCommentData = {
-      commentId: response.data.id,
-      commentText: newComment,
-      userId: DataUser.id,
-      userFirstName: DataUser.firstName,
-      userLastName: DataUser.lastName,
-      feedId: feedId,
-      idUserMention: id_user_mention,
-      userMention: user_mention,
-    };
-
-    sendCommentNotification(newCommentData);
-
-    setComments(prev => [...prev, newCommentData]);
-    setNewComment('');
-    setMentionList([]); // reset
-    setShowSuggestions(false);
-    onCommentAdded();
-  } catch (error) {
-    console.error('Error adding comment:', error);
-  } finally {
-    setIsSendingComment(false);
-  }
-};
+  };
 
 
 
@@ -240,7 +243,7 @@ const addComment = async () => {
 
   const saveEditedComment = async commentId => {
     try {
-      await patchHttps(`comments/${commentId}`, {comments: editCommentText});
+      await patchHttps(`comments/${commentId}`, { comments: editCommentText });
       fetchComments();
       setEditingComment(null);
     } catch (error) {
@@ -283,47 +286,47 @@ const addComment = async () => {
   };
 
   const handleCommentChange = async (text) => {
-  setNewComment(text);
-  if (mentionObj && !text.includes(mentionObj.name)) setMentionObj(null);
+    setNewComment(text);
+    if (mentionObj && !text.includes(mentionObj.name)) setMentionObj(null);
 
-  const selection = text.lastIndexOf('@');
-  if (selection !== -1) {
-    const afterAt = text.slice(selection + 1);
-    if (/^[\w\s]{0,20}$/.test(afterAt)) {
-      setMentionQuery(afterAt);
-      setMentionStart(selection);
-      const users = await fetchMentionUsers(afterAt);
-      setSuggestions(users);
-      setShowSuggestions(true);
-      return;
+    const selection = text.lastIndexOf('@');
+    if (selection !== -1) {
+      const afterAt = text.slice(selection + 1);
+      if (/^[\w\s]{0,20}$/.test(afterAt)) {
+        setMentionQuery(afterAt);
+        setMentionStart(selection);
+        const users = await fetchMentionUsers(afterAt);
+        setSuggestions(users);
+        setShowSuggestions(true);
+        return;
+      }
     }
-  }
-  setShowSuggestions(false);
-  setMentionQuery('');
-  setMentionStart(-1);
-};
+    setShowSuggestions(false);
+    setMentionQuery('');
+    setMentionStart(-1);
+  };
 
-const handleSelectMention = (user) => {
-  if (mentionStart === -1) return;
+  const handleSelectMention = (user) => {
+    if (mentionStart === -1) return;
 
-  const fullName = `${user.name}`;
-  const mentionText = `@${fullName}`;
+    const fullName = `${user.name}`;
+    const mentionText = `@${fullName}`;
 
-  const before = newComment.slice(0, mentionStart);
-  const after = newComment.slice(mentionStart + mentionQuery.length + 1);
-  const fullText = before + mentionText + after;
-  setNewComment(fullText);
+    const before = newComment.slice(0, mentionStart);
+    const after = newComment.slice(mentionStart + mentionQuery.length + 1);
+    const fullText = before + mentionText + after;
+    setNewComment(fullText);
 
-  setMentionList(prev => {
-    const alreadyMentioned = prev.some(m => m.id === user.id);
-    if (alreadyMentioned) return prev;
-    return [...prev, { id: user.id, name: mentionText }];
-  });
+    setMentionList(prev => {
+      const alreadyMentioned = prev.some(m => m.id === user.id);
+      if (alreadyMentioned) return prev;
+      return [...prev, { id: user.id, name: mentionText }];
+    });
 
-  setShowSuggestions(false);
-  setMentionQuery('');
-  setMentionStart(-1);
-};
+    setShowSuggestions(false);
+    setMentionQuery('');
+    setMentionStart(-1);
+  };
 
 
   const navigateToProfile = userId => {
@@ -331,11 +334,12 @@ const handleSelectMention = (user) => {
     if (DataUser.id == userId) {
       navigation.navigate('Profile');
     } else {
-      navigation.navigate('FriendTimeline', {id: userId});
+      navigation.navigate('FriendTimeline', { id: userId });
     }
   };
 
   const likeComment = async commentId => {
+    setStatusLikeComment(true);
     const updatedComments = [...comments];
 
     // Encuentra el comentario a actualizar
@@ -344,14 +348,17 @@ const handleSelectMention = (user) => {
     );
 
     if (commentToUpdate) {
+      let isLiked = commentToUpdate.userHasLiked;
+      console.log('primer', isLiked);
       // Optimistic UI: actualiza estado local de inmediato
       commentToUpdate.liked = !commentToUpdate.liked;
-      commentToUpdate.likeCount += commentToUpdate.liked ? 1 : -1;
+      commentToUpdate.reactionCount = isLiked ? Number(commentToUpdate.reactionCount) - 1 : Number(commentToUpdate.reactionCount) + 1;
+      commentToUpdate.userHasLiked = !commentToUpdate.userHasLiked;
       setComments(updatedComments);
       setLikecomment(prev => !prev);
     }
     try {
-      await postHttps('like/comment', {id_comment: commentId, type: 'COMMENT'});
+      await postHttps('like/comment', { id_comment: commentId, type: 'COMMENT' });
       setLikecomment(!likecomment);
       fetchComments();
     } catch (error) {
@@ -365,6 +372,7 @@ const handleSelectMention = (user) => {
   };
 
   const likeReply = async replyId => {
+    setStatusLikeComment(true)
     setLikereply(prev => !prev);
 
     // También puedes actualizar la estructura de comentarios directamente si lo deseas
@@ -379,12 +387,13 @@ const handleSelectMention = (user) => {
     }
 
     try {
-      await postHttps('like/reply', {id_reply: replyId, type: 'REPLY'});
+      await postHttps('like/reply', { id_reply: replyId, type: 'REPLY' });
       setLikereply(!likereply);
 
       // Recargar comentarios para reflejar cambios
       const updatedComments = await getHttps(`comments/find/${feedId}`);
       setComments(updatedComments.data);
+      setStatusLikeComment(updatedComments.data.userHasLiked);
 
       // Actualizar las respuestas en el modal
       if (selectedComment) {
@@ -407,16 +416,39 @@ const handleSelectMention = (user) => {
   };
 
   const renderReplies = comment => {
-    if (comment.replies && comment.replies.length === 1) {
-      return renderReply({item: comment.replies[0]});
-    } else if (comment.replies && comment.replies.length > 1) {
-      return (
-        <TouchableOpacity onPress={() => openReplyModal(comment)}>
-          <Text style={styles.viewMoreText}>View More Replies</Text>
+    if (!comment.replies || comment.replies.length === 0) return null;
+
+    const isExpanded = expandedReplies[comment.commentId];
+
+    return (
+      <View>
+        <TouchableOpacity
+          onPress={() => setExpandedReplies(prev => ({
+            ...prev,
+            [comment.commentId]: !isExpanded
+          }))}
+          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 ,marginBottom: 10 }}>
+          <Text style={styles.viewMoreText}>
+            {isExpanded ? 'Ocultar respuestas' : `Respuestas (${comment.replies.length})`}
+          </Text>
+          <Icon
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color="white"
+            style={{ marginLeft: 6, alignSelf: 'center' }}
+          />
         </TouchableOpacity>
-      );
-    }
-    return null;
+        {isExpanded && (
+          <View style={{ marginTop: 4 }}>
+            {comment.replies.map(reply => (
+              <React.Fragment key={reply.replyId}>
+                {renderReply({ item: reply })}
+              </React.Fragment>
+            ))}
+          </View>
+        )}
+      </View>
+    );
   };
 
   useEffect(() => {
@@ -425,7 +457,7 @@ const handleSelectMention = (user) => {
     }
   }, [replyModalVisible]);
 
-  const renderReply = ({item}) => (
+  const renderReply = ({ item }) => (
     <View style={styles.replyItem}>
       <View style={styles.replyHeader}>
         <TouchableOpacity
@@ -434,7 +466,7 @@ const handleSelectMention = (user) => {
           <Image
             source={{
               uri:
-                item.replyUser?.users_img ||
+                item.replyUser?.img ||
                 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
             }}
             style={styles.commentImage}
@@ -457,9 +489,9 @@ const handleSelectMention = (user) => {
 
       <View style={styles.replyActions}>
         <TouchableOpacity onPress={() => likeReply(item.replyId)}>
-          <Icon name="heart" size={25} color={COLORS.white} />
+          <Icon name="heart" size={25} color={item.userHasLiked ? COLORS.red : COLORS.white} />
         </TouchableOpacity>
-        <Text style={{color: 'white'}}>{item.replyUser.replycount}</Text>
+        <Text style={{ color: 'white' }}>{item.replyUser.replycount}</Text>
         {DataUser.id == item.replyUser.userId && (
           <>
             {editingReply === item.replyId ? (
@@ -475,145 +507,145 @@ const handleSelectMention = (user) => {
         )}
         {(DataUser.id === feedOwnerId ||
           DataUser.id == item.replyUser.userId) && (
-          <TouchableOpacity onPress={() => deleteReply(item.replyId)}>
-            <Icon name="trash" size={25} color={COLORS.red} />
-          </TouchableOpacity>
-        )}
+            <TouchableOpacity onPress={() => deleteReply(item.replyId)}>
+              <Icon name="trash" size={25} color={COLORS.red} />
+            </TouchableOpacity>
+          )}
       </View>
     </View>
   );
 
-const renderCommentText = (item) => {
-  const content = item.commentText;
+  const renderCommentText = (item) => {
+    const content = item.commentText;
 
-  let idMentionList = [];
-  let userMentionList = [];
+    let idMentionList = [];
+    let userMentionList = [];
 
-  try {
-    idMentionList = Array.isArray(item.idUserMention)
-      ? item.idUserMention
-      : JSON.parse(item.idUserMention || '[]');
-    userMentionList = Array.isArray(item.userMention)
-      ? item.userMention
-      : JSON.parse(item.userMention || '[]');
-  } catch {
-    return <Text style={styles.commentText}>{content}</Text>;
-  }
-
-  if (!userMentionList.length || !idMentionList.length) {
-    return <Text style={styles.commentText}>{content}</Text>;
-  }
-
-  let result = [];
-  let currentIndex = 0;
-
-  userMentionList.forEach((mention, i) => {
-    const index = content.indexOf(mention, currentIndex);
-    if (index !== -1) {
-      const before = content.substring(currentIndex, index);
-      result.push(<Text key={`before-${i}`} style={styles.commentText}>{before}</Text>);
-      result.push(
-        <Text
-          key={`mention-${i}`}
-          style={{ color: '#944af4', fontWeight: 'bold' }}
-          onPress={() => navigateToProfile(idMentionList[i])}
-        >
-          {mention}
-        </Text>
-      );
-      currentIndex = index + mention.length;
+    try {
+      idMentionList = Array.isArray(item.idUserMention)
+        ? item.idUserMention
+        : JSON.parse(item.idUserMention || '[]');
+      userMentionList = Array.isArray(item.userMention)
+        ? item.userMention
+        : JSON.parse(item.userMention || '[]');
+    } catch {
+      return <Text style={styles.commentText}>{content}</Text>;
     }
-  });
 
-  result.push(<Text key="after" style={styles.commentText}>{content.substring(currentIndex)}</Text>);
-  return <Text>{result}</Text>;
-};
+    if (!userMentionList.length || !idMentionList.length) {
+      return <Text style={styles.commentText}>{content}</Text>;
+    }
+
+    let result = [];
+    let currentIndex = 0;
+
+    userMentionList.forEach((mention, i) => {
+      const index = content.indexOf(mention, currentIndex);
+      if (index !== -1) {
+        const before = content.substring(currentIndex, index);
+        result.push(<Text key={`before-${i}`} style={styles.commentText}>{before}</Text>);
+        result.push(
+          <Text
+            key={`mention-${i}`}
+            style={{ color: '#944af4', fontWeight: 'bold' }}
+            onPress={() => navigateToProfile(idMentionList[i])}
+          >
+            {mention}
+          </Text>
+        );
+        currentIndex = index + mention.length;
+      }
+    });
+
+    result.push(<Text key="after" style={styles.commentText}>{content.substring(currentIndex)}</Text>);
+    return <Text>{result}</Text>;
+  };
 
 
-const renderComment = ({ item }) => (
-  <View style={styles.commentContainer}>
-    <TouchableOpacity onPress={() => navigateToProfile(item.userId)}>
-      <View style={styles.commentHeader}>
-        <Image
-          source={{
-            uri:
-              item.userImg ||
-              'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
-          }}
-          style={styles.commentImage}
-        />
-        <Text style={{ color: 'white' }}>
-          {item.userFirstName} {item.userLastName}
-        </Text>
-      </View>
-    </TouchableOpacity>
-
-   {editingComment === item.commentId ? (
-  <TextInput
-    style={styles.input}
-    value={editCommentText}
-    onChangeText={setEditCommentText}
-  />
-) : (
-  renderCommentText(item)
-)}
-
-    <View style={{ margin: 8 }} />
-
-    <View style={styles.replyActions}>
-      <TouchableOpacity onPress={() => likeComment(item.commentId)}>
-        <Icon name="heart" size={25} color={COLORS.white} />
+  const renderComment = ({ item }) => (
+    <View style={styles.commentContainer}>
+      <TouchableOpacity onPress={() => navigateToProfile(item.userId)}>
+        <View style={styles.commentHeader}>
+          <Image
+            source={{
+              uri:
+                item.userImg ||
+                'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
+            }}
+            style={styles.commentImage}
+          />
+          <Text style={{ color: 'white' }}>
+            {item.userFirstName} {item.userLastName}
+          </Text>
+        </View>
       </TouchableOpacity>
-      <Text style={{ color: 'white', fontWeight: 'bold' }}>
-        {item.reactionCount}
-      </Text>
 
-      {(DataUser.id === item.userId || DataUser.id === feedOwnerId) && (
-        <>
-          {DataUser.id === item.userId &&
-            (editingComment === item.commentId ? (
-              <TouchableOpacity onPress={() => saveEditedComment(item.commentId)}>
-                <Icon name="check" size={25} color={COLORS.white} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={() => editComment(item)}>
-                <Icon name="edit" size={25} color={COLORS.white} />
-              </TouchableOpacity>
-            ))}
-          <TouchableOpacity onPress={() => deleteComment(item.commentId)}>
-            <Icon name="trash" size={25} color={COLORS.red} />
-          </TouchableOpacity>
-        </>
+      {editingComment === item.commentId ? (
+        <TextInput
+          style={styles.input}
+          value={editCommentText}
+          onChangeText={setEditCommentText}
+        />
+      ) : (
+        renderCommentText(item)
       )}
 
-      <TouchableOpacity onPress={() => setReplyingTo(item.commentId)}>
-        <Text style={styles.replyText}>Reply</Text>
-      </TouchableOpacity>
-    </View>
+      <View style={{ margin: 8 }} />
 
-    <View style={{ margin: 8 }} />
+      <View style={styles.replyActions}>
+        <TouchableOpacity onPress={() => likeComment(item.commentId)}>
+          <Icon name="heart" size={25} color={item.userHasLiked ? COLORS.red : COLORS.white} />
+        </TouchableOpacity>
+        <Text style={{ color: 'white', fontWeight: 'bold' }}>
+          {item.reactionCount}
+        </Text>
 
-    {replyingTo === item.commentId && (
-      <View style={styles.replyInputContainer}>
-        <TextInput
-          style={styles.replyInput}
-          placeholder="Escribe una Replica ..."
-          placeholderTextColor={'white'}
-          value={newReply}
-          onChangeText={setNewReply}
-        />
-        <TouchableOpacity
-          style={styles.replySendButton}
-          onPress={() => addReply(item.commentId)}
-        >
-          <MaterialIcons name="send" size={30} color="white" />
+        {(DataUser.id === item.userId || DataUser.id === feedOwnerId) && (
+          <>
+            {DataUser.id === item.userId &&
+              (editingComment === item.commentId ? (
+                <TouchableOpacity onPress={() => saveEditedComment(item.commentId)}>
+                  <Icon name="check" size={25} color={COLORS.white} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={() => editComment(item)}>
+                  <Icon name="edit" size={25} color={COLORS.white} />
+                </TouchableOpacity>
+              ))}
+            <TouchableOpacity onPress={() => deleteComment(item.commentId)}>
+              <Icon name="trash" size={25} color={COLORS.red} />
+            </TouchableOpacity>
+          </>
+        )}
+
+        <TouchableOpacity onPress={() => setReplyingTo(item.commentId)}>
+          <Text style={styles.replyText}>Responder</Text>
         </TouchableOpacity>
       </View>
-    )}
 
-    {renderReplies(item)}
-  </View>
-);
+      <View style={{ margin: 8 }} />
+
+      {replyingTo === item.commentId && (
+        <View style={styles.replyInputContainer}>
+          <TextInput
+            style={styles.replyInput}
+            placeholder="Escribe una Replica ..."
+            placeholderTextColor={'white'}
+            value={newReply}
+            onChangeText={setNewReply}
+          />
+          <TouchableOpacity
+            style={styles.replySendButton}
+            onPress={() => addReply(item.commentId)}
+          >
+            <MaterialIcons name="send" size={30} color="white" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {renderReplies(item)}
+    </View>
+  );
 
   return (
     <Modal
@@ -627,13 +659,13 @@ const renderComment = ({ item }) => (
       <View style={styles.modalContainer}>
         <Text style={styles.title}>Comentarios</Text>
         <FlatList
-         ref={flatListRef}
+          ref={flatListRef}
           data={comments}
           keyExtractor={(item, index) => `${index}`}
           renderItem={renderComment}
-            getItemLayout={(data, index) => (
-    { length: 120, offset: 120 * index, index }
-  )}
+          getItemLayout={(data, index) => (
+            { length: 120, offset: 120 * index, index }
+          )}
           contentContainerStyle={styles.commentList}
         />
         <View style={styles.inputContainer}>
@@ -644,29 +676,29 @@ const renderComment = ({ item }) => (
             value={newComment}
             onChangeText={handleCommentChange}
           />
-       <TouchableOpacity
-  style={[styles.replySendButton, isSendingComment && { opacity: 0.5 }]}
-  onPress={addComment}
-  disabled={isSendingComment}
->
-  <MaterialIcons name="send" size={30} color="white" />
-</TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.replySendButton, isSendingComment && { opacity: 0.5 }]}
+            onPress={addComment}
+            disabled={isSendingComment}
+          >
+            <MaterialIcons name="send" size={30} color="white" />
+          </TouchableOpacity>
         </View>
       </View>
 
       {showSuggestions && suggestions.length > 0 && (
-  <View style={{ backgroundColor: 'white', maxHeight: 150 }}>
-    {suggestions.map(user => (
-      <TouchableOpacity
-        key={user.id}
-        onPress={() => handleSelectMention(user)}
-        style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#ccc' }}
-      >
-        <Text style={{ color: 'black' }}>{user.name}</Text>
-      </TouchableOpacity>
-    ))}
-  </View>
-)}
+        <View style={{ backgroundColor: 'white', maxHeight: 150 }}>
+          {suggestions.map(user => (
+            <TouchableOpacity
+              key={user.id}
+              onPress={() => handleSelectMention(user)}
+              style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#ccc' }}
+            >
+              <Text style={{ color: 'black' }}>{user.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
       {selectedComment && (
         <Modal
           visible={replyModalVisible}
@@ -698,7 +730,7 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 2.3,
-    backgroundColor: '#333333',
+    backgroundColor: '#200f39',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -723,10 +755,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   commentContainer: {
-    padding: 12,
-    marginBottom: 10,
+    padding: 4,
+    marginBottom: 9,
     backgroundColor: COLORS.lightGray,
     borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.gray4 ,
   },
   replyInput: {
     flex: 1, // Para que ocupe todo el espacio disponible
@@ -778,6 +812,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 10,
     fontFamily: 'Poppins-Bold',
+    marginBottom: 10,
   },
   replyItem: {
     marginLeft: 20,
@@ -817,10 +852,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   viewMoreText: {
-    backgroundColor: 'gray',
+    backgroundColor: 'transparent',
     fontWeight: 'bold',
-    marginTop: 6,
-    textAlign: 'right',
+    marginTop: 0,
+    textAlign: 'left',
+    paddingLeft: 0,
+    color: 'white',
   },
   replyModalContainer: {
     flex: 0.7,
@@ -867,6 +904,8 @@ const styles = StyleSheet.create({
   replyAuthor: {
     fontSize: 16,
     color: 'white',
+    paddingTop: 2,
+    paddingBottom: 2,
   },
   commentImage: {
     width: 30,

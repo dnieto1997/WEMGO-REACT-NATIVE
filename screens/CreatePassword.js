@@ -14,6 +14,7 @@ import Button from '../components/Button';
 import {validateInput} from '../utils/actions/formActions';
 import {reducer} from '../utils/reducers/formReducers';
 import Feather from 'react-native-vector-icons/Feather';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const isTestMode = true;
 
@@ -76,7 +77,7 @@ const CreatePassword = ({navigation}) => {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.headerIconContainer}>
-            <Image source={icons.back} style={styles.back} />
+           <MaterialIcons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Password</Text>
         </View>
@@ -97,7 +98,7 @@ const CreatePassword = ({navigation}) => {
             placeholder="*************"
             placeholderTextColor={COLORS.black}
             secureTextEntry={true}
-            icon={icons.lock}
+            iconComponent={<MaterialIcons name="lock" size={20} color={COLORS.black} />}
           />
           <Input
             onInputChanged={inputChangedHandler}
@@ -107,7 +108,7 @@ const CreatePassword = ({navigation}) => {
             placeholder="*************"
             placeholderTextColor={COLORS.black}
             secureTextEntry={true}
-            icon={icons.lock}
+           iconComponent={<MaterialIcons name="lock" size={20} color={COLORS.black} />}
           />
           <View>
             <View style={styles.viewContainer}>

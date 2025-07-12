@@ -18,6 +18,7 @@ const HeaderProfile = ({
   isFollowing,
   Followers,
   Following,
+  countFeed,
   onFollow,
   onOpenImage,
   navigation,
@@ -27,10 +28,10 @@ const HeaderProfile = ({
 }) => {
   return (
     <View style={styles.profileContainer}>
-        <View style={{top:10}}>
-     <HeaderSinlogo onRefresh={onRefresh}/>
-        </View>
-    
+      <View style={{ top: 10 }}>
+        <HeaderSinlogo onRefresh={onRefresh} />
+      </View>
+
       <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginTop: 25 }}>
         <TouchableOpacity onPress={onOpenImage}>
           <Image source={{ uri: String(user.img) }} style={styles.avatar} />
@@ -43,16 +44,23 @@ const HeaderProfile = ({
             )}
           </View>
           <View style={styles.followRow}>
+            <TouchableOpacity>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={styles.numItem}>{countFeed ? countFeed : 0}</Text>
+                <Text style={styles.nameItem}>MomentGo</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={styles.line} />
             <TouchableOpacity onPress={() => navigation.navigate('Followers', { id: userId })}>
               <View style={{ alignItems: 'center' }}>
-                <Text style={styles.numItem}>{Followers}</Text>
+                <Text style={styles.numItem}>{Followers ? Followers : 0}</Text>
                 <Text style={styles.nameItem}>Seguidores</Text>
               </View>
             </TouchableOpacity>
             <View style={styles.line} />
             <TouchableOpacity onPress={() => navigation.navigate('Following', { id: userId })}>
               <View style={{ alignItems: 'center' }}>
-                <Text style={styles.numItem}>{Following}</Text>
+                <Text style={styles.numItem}>{Following ? Following : 0}</Text>
                 <Text style={styles.nameItem}>Siguiendo</Text>
               </View>
             </TouchableOpacity>
@@ -62,17 +70,17 @@ const HeaderProfile = ({
       <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
         <Text style={styles.address} numberOfLines={4}>{user.description || ''}</Text>
       </View>
-      <View style={styles.buttonContainer}>
+      <View style={styles.buttonContainerFull}>
         <TouchableOpacity
-          style={[styles.followButton, isFollowing ? styles.following : styles.notFollowing]}
+          style={[styles.fullButton, isFollowing ? styles.following : styles.notFollowing]}
           onPress={onFollow}>
           <View style={styles.buttonContent}>
             <MaterialCommunityIcons name={isFollowing ? 'account-remove' : 'account-check'} color={COLORS.black} size={24} />
-            <Text style={styles.buttonText}>{isFollowing ? 'Siguiendo' : 'Seguir'}</Text>
+            <Text style={styles.buttonText}>{isFollowing ? 'Dejar de seguir' : 'Seguir'}</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.messageButton}
+          style={[styles.fullButton, styles.messageButton]}
           onPress={() => navigation.navigate('MessageDetails', { id: userId })}>
           <View style={styles.buttonContent}>
             <MaterialCommunityIcons name="message-plus-outline" color={COLORS.black} size={24} />
@@ -80,10 +88,10 @@ const HeaderProfile = ({
           </View>
         </TouchableOpacity>
         <TouchableOpacity
-  style={{ padding: 6 }}
-  onPress={onShare}>
-  <Ionicons name="share-social-outline" size={24} color="#fff" />
-</TouchableOpacity>
+          style={[]}
+          onPress={onShare}>
+          <Ionicons name="share-social-outline" size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -146,11 +154,24 @@ const styles = StyleSheet.create({
     width: 216,
     marginTop: 8,
   },
-  buttonContainer: {
+  buttonContainerFull: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 1,
+    width: '100%',
+    paddingHorizontal: 16,
+  },
+  fullButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    borderRadius: 12,
+    marginHorizontal: 4,
+    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
-    gap: 8,
   },
   followButton: {
     paddingVertical: 8,

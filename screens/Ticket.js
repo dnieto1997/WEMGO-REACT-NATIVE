@@ -18,10 +18,7 @@ const Ticket = ({ navigation }) => {
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.headerIconContainer}>
-          <Image
-            source={icons.back}
-            style={styles.back}
-          />
+          <MaterialIcons name="arrow-back" size={24} color="black" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Ticket</Text>
       </View>

@@ -23,9 +23,7 @@ import {
   Keyboard,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import AsyncStorage, {
-  useAsyncStorage,
-} from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getHttps,
   patchHttpsStories,
@@ -33,12 +31,19 @@ import {
   postHttps,
 } from '../api/axios';
 import {launchImageLibrary} from 'react-native-image-picker';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import Video from 'react-native-video';
-import {SocketContext} from '../context/SocketContext';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
 
-import {Platform} from 'react-native';
+import {SocketContext} from '../context/SocketContext';
+
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useFocusEffect} from '@react-navigation/native';
+
+import ProgressBars from '../components/ProgressBars';
+import StoryItem from '../components/StoryItem';
+import ConfigBar from '../components/ConfigBar';
+import MessageInput from '../components/MessageInput';
+import EditStoryModal from '../components/EditStoryModal';
+import ViewersModal from '../components/ViewersModal';
+import ReactionsModal from '../components/ReactionsModal';
 const {width, height} = Dimensions.get('window');
 const ViewStories = ({route}) => {
   const {id} = route.params;
@@ -75,20 +80,25 @@ const ViewStories = ({route}) => {
   const [isLoadingCount2, setIsLoadingCount2] = useState(false);
   const [ViewUsers, setViewUsers] = useState({});
   const [ViewUsers2, setViewUsers2] = useState({});
+  const insets = useSafeAreaInsets();
 
   const currentIndexRef = useRef(currentIndex);
-
+  const [isSending, setIsSending] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [openModal2, setOpenModal2] = useState(false);
-
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [inputHeight, setInputHeight] = useState(40);
   const [hasReacted, setHasReacted] = useState(false);
 
   const flatListRef = useRef(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const progress = useRef(new Animated.Value(0)).current;
-  const animationRef = useRef(null);
 
+  const duration = 5000; // o el tiempo total por historia
+  const animationRef = useRef(null);
+  const storyTimerRef = useRef(null);
+  const progressValueRef = useRef(0);
+  const shouldPauseAnimation = useRef(false);
   const hasEndedRef = useRef(false);
 
   const pickImage = async () => {
@@ -131,13 +141,70 @@ const ViewStories = ({route}) => {
           setLoading(false);
         } catch (error) {
           console.error('Error loading specific story:', error);
-          navigation.navigate('Event');
+          navigation.goBack();
         }
       }
     };
 
     loadSpecificStory();
   }, [route.params.storyId]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+      setIsKeyboardOpen(true);
+      setIsPaused(true);
+      shouldPauseAnimation.current = true;
+
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
+
+      if (storyTimerRef.current) {
+        clearTimeout(storyTimerRef.current);
+      }
+    });
+
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setIsKeyboardOpen(false);
+      setIsPaused(false);
+      shouldPauseAnimation.current = false;
+
+      // Calcular el tiempo restante y reanudar animación
+      const elapsed = progressValueRef.current || 0;
+      const remaining = duration - elapsed;
+
+      if (remaining > 0) {
+        startProgressAnimation(remaining);
+      }
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const startProgressAnimation = (customDuration = duration) => {
+    progress.setValue(0);
+
+    animationRef.current = Animated.timing(progress, {
+      toValue: 1,
+      duration: customDuration,
+      useNativeDriver: false,
+    });
+
+    animationRef.current.start(({finished}) => {
+      if (finished && !isPaused) {
+        goToNextStory();
+      }
+    });
+
+    progress.addListener(({value}) => {
+      progressValueRef.current = value * duration;
+    });
+
+    storyTimerRef.current = setTimeout(() => {}, customDuration);
+  };
 
   useEffect(() => {
     if (DataUser.id && !route.params?.storyId) {
@@ -150,71 +217,144 @@ const ViewStories = ({route}) => {
       const response = await getHttps(`stories/find/${DataUser.id}`);
       const apiStories = response.data;
 
+      console.log('Fetched stories:', JSON.stringify(apiStories));
+
       if (!Array.isArray(apiStories) || apiStories.length === 0) {
         setLoading(false);
         return;
       }
 
-      const hasOwnStory = apiStories.some(
-        item =>
-          item.user.id === DataUser.id &&
-          Array.isArray(item.stories) &&
-          item.stories.length > 0,
-      );
-
-      const hasRouteUserStory = apiStories.some(
-        item =>
-          item.user.id === id &&
-          Array.isArray(item.stories) &&
-          item.stories.length > 0,
-      );
-
-      if (!hasOwnStory && !hasRouteUserStory) {
-        navigation.replace('AddStory');
-        return;
-      }
-
-      // Ordenar priorizando el usuario de la ruta
-      const sortedStories = apiStories.sort((a, b) =>
-        a.user.id === id ? -1 : b.user.id === id ? 1 : 0,
-      );
-
-      // Agrupar por usuario con sus stories
-      let groupedByUser = sortedStories
+      // Agrupar por usuario
+      let groupedByUser = apiStories
         .filter(user => Array.isArray(user.stories) && user.stories.length > 0)
-        .map(user => ({
-          user: user.user,
-          stories: user.stories.map(story => ({
-            ...story,
-            user: user.user,
-          })),
-        }));
+        .map(user => {
+          const sortedStories = [...user.stories].sort(
+            (a, b) =>
+              new Date(a.date_created).getTime() -
+              new Date(b.date_created).getTime(),
+          );
+          const allSeen = sortedStories.every(s => s.seen);
 
-      // 🟣 Filtra para evitar que tus stories se incluyan cuando no deben
+          return {
+            user: user.user,
+            stories: sortedStories.map(story => ({
+              ...story,
+              user: user.user,
+            })),
+            viewAllStories: allSeen,
+          };
+        });
+
+      // Si NO es tu perfil, excluye tus historias
       if (id !== DataUser.id) {
         groupedByUser = groupedByUser.filter(
           group => group.user.id !== DataUser.id,
         );
       }
 
-      // Aplanar para flatlist
-      const allStories = groupedByUser.flatMap(group => group.stories);
+      // Orden: primero el usuario de la ruta, luego los que tienen historias sin ver, luego los que ya viste todo
+      groupedByUser.sort((a, b) => {
+        if (a.user.id === id) return -1;
+        if (b.user.id === id) return 1;
+        if (!a.viewAllStories && b.viewAllStories) return -1;
+        if (a.viewAllStories && !b.viewAllStories) return 1;
+        return 0;
+      });
 
-      // Si no hay stories válidas, redirige
-      if (allStories.length === 0) {
-        navigation.replace('AddStory');
+      const currentUserGroup = groupedByUser.find(
+        group => group.user.id === id,
+      );
+
+      if (!currentUserGroup || currentUserGroup.stories.length === 0) {
+        navigation.goBack();
         return;
       }
 
-      setIsOwner(allStories[0].user.id === DataUser.id);
+      const allStories = groupedByUser.flatMap(group => group.stories);
+
+      const hasUnseen = currentUserGroup.stories.some(s => !s.seen);
+      let startingIndex = 0;
+
+      if (hasUnseen) {
+        const firstUnseen = currentUserGroup.stories.find(s => !s.seen);
+        startingIndex = allStories.findIndex(s => s.id === firstUnseen.id);
+      } else {
+        startingIndex = allStories.findIndex(
+          s => s.id === currentUserGroup.stories[0].id,
+        );
+      }
+
+      // 🔴 Si ya viste todas y es el último grupo → salir
+      const userIndex = groupedByUser.findIndex(group => group.user.id === id);
+      const isLastUser = userIndex === groupedByUser.length - 1;
+      if (currentUserGroup.viewAllStories && isLastUser) {
+        navigation.goBack();
+        return;
+      }
+
+      setIsOwner(currentUserGroup.user.id === DataUser.id);
       setStories(allStories);
       setUserStoryGroups(groupedByUser);
+      setCurrentIndex(startingIndex);
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: startingIndex,
+          animated: false,
+        });
+      }, 100);
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching stories:', error);
       setLoading(false);
     }
   };
+
+
+
+      
+  const handleAnimationPauseState = () => {
+    const anyModalOpen =
+      openModal || openModal2 || editModalVisible || alertVisible;
+
+    if (anyModalOpen) {
+      if (!shouldPauseAnimation.current) {
+        setIsPaused(true);
+        shouldPauseAnimation.current = true;
+
+        if (animationRef.current) {
+          animationRef.current.stop();
+          animationRef.current = null;
+        }
+      }
+    } else {
+      if (shouldPauseAnimation.current) {
+        setIsPaused(false);
+        shouldPauseAnimation.current = false;
+
+        const remaining = duration - (progressValueRef.current || 0);
+        if (remaining > 0) {
+          animationRef.current = Animated.timing(progress, {
+            toValue: 1,
+            duration: remaining,
+            useNativeDriver: false,
+          });
+
+          animationRef.current.start(({finished}) => {
+            if (finished && !shouldPauseAnimation.current) {
+              goToNextStory();
+            }
+          });
+        }
+      }
+    }
+  };
+  useEffect(() => {
+    handleAnimationPauseState();
+  }, [openModal, openModal2, editModalVisible, alertVisible]);
+
+
 
   const isVideo = url => {
     if (!url) return false;
@@ -230,85 +370,108 @@ const ViewStories = ({route}) => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
   useEffect(() => {
-    if (stories.length === 0) return;
+    if (!stories.length) return;
 
     const currentStory = stories[currentIndex];
     if (!currentStory) return;
 
     const isCurrentStoryVideo = isVideo(currentStory.storyUrl);
-
     const isImage = !isCurrentStoryVideo;
+    const duration = isImage ? 5000 : null;
 
+    // Protege estados
     setIsCurrentVideo(isCurrentStoryVideo);
     setIsOwner(currentStory.user?.id === DataUser.id);
-
-    // 🔁 Reiniciar protecciones
     hasEndedRef.current = false;
     activeAudioIndexRef.current = currentIndex;
 
-    // 🧼 Limpiar animación
+    // Limpiar cualquier animación anterior
     if (animationRef.current) {
       animationRef.current.stop();
       animationRef.current = null;
     }
-
     progress.setValue(0);
 
-    // 👁 Registrar vista si no es del dueño
+    // Vista (si no es del dueño)
     if (currentStory.user?.id !== DataUser.id) {
       postHttps('story-views', {
         storyid: currentStory.id,
         user: DataUser.id,
-      })
-        .then(res => console.log('✅ Vista registrada:', res.data))
-        .catch(err => console.log('❌ Error al registrar vista:', err));
+      }).catch(err => console.log('❌ Error vista:', err));
     }
 
-    // 🖼 Imagen
-    if (!isAnimationPaused && isImage) {
-      const duration = 5000;
-      console.log(`▶️ Imagen con animación de ${duration}ms`);
-
+    if (isImage) {
+      if (openModal || openModal2 || editModalVisible || alertVisible) {
+        console.log('⛔ No iniciar animación: modal abierto');
+        return;
+      }
       animationRef.current = Animated.timing(progress, {
         toValue: 1,
-        duration,
+        duration: duration,
         useNativeDriver: false,
       });
 
       animationRef.current.start(({finished}) => {
-        if (finished && !isAnimationPaused) {
+        if (finished) {
           goToNextStory();
         }
       });
     }
-
+    if (openModal || openModal2 || editModalVisible || alertVisible) {
+      console.log('⛔ No iniciar animación: modal abierto');
+      return;
+    }
     return () => {
-      console.log('🧹 Cleanup al salir de historia');
       if (animationRef.current) {
         animationRef.current.stop();
         animationRef.current = null;
       }
     };
-  }, [currentIndex, stories, isAnimationPaused]);
+  }, [currentIndex, stories, shouldPauseAnimation]);
 
-  const goToNextStory = () => {
-    const nextIndex = currentIndexRef.current + 1;
-    console.log(
-      `➡️ Pasando de historia ${currentIndexRef.current} a ${nextIndex} (de ${stories.length})`,
-    );
+const goToNextStory = () => {
+  const nextIndex = currentIndex + 1;
 
-    if (nextIndex < stories.length) {
-      flatListRef.current?.scrollToIndex({index: nextIndex, animated: true});
+  if (nextIndex >= stories.length) {
+    navigation.goBack();
+    return;
+  }
+
+  const nextStory = stories[nextIndex];
+  const currentUserId = stories[currentIndex]?.user?.id;
+  const nextUserId = nextStory?.user?.id;
+
+  const isDifferentUser = currentUserId !== nextUserId;
+
+  if (isDifferentUser) {
+    const currentUserIndex = userStoryGroups.findIndex(group => group.user.id === nextUserId);
+
+    if (currentUserIndex === -1) {
       setCurrentIndex(nextIndex);
-    } else {
-      console.log('🚪 Navegando a Event');
-      navigation.navigate('Event');
+      return;
     }
-  };
+
+    const isLastUser = currentUserIndex === userStoryGroups.length - 1;
+
+    const allSeen = userStoryGroups[currentUserIndex]?.stories?.every(s => s.seen);
+
+    if (isLastUser && allSeen) {
+      navigation.goBack();
+      return;
+    }
+  }
+
+  setCurrentIndex(nextIndex);
+  flatListRef.current?.scrollToIndex({
+    index: nextIndex,
+    animated: true,
+  });
+};
+
 
   const handlePressIn = () => {
     setIsPaused(true);
-    isAnimationPaused.current = true;
+    shouldPauseAnimation.current = true;
     if (animationRef.current) {
       animationRef.current.stop();
     }
@@ -316,13 +479,13 @@ const ViewStories = ({route}) => {
 
   const handlePressOut = () => {
     setIsPaused(false);
-    isAnimationPaused.current = false;
+    shouldPauseAnimation.current = false;
     // No reinicies aquí. El useEffect se encargará si corresponde.
   };
 
   const handleLongPress = () => {
     setIsPaused(true);
-    isAnimationPaused.current = true;
+    shouldPauseAnimation.current = true;
     if (animationRef.current) {
       animationRef.current.stop();
     }
@@ -331,7 +494,7 @@ const ViewStories = ({route}) => {
   const handleSend = useCallback(async () => {
     const storyId = stories[currentIndex].id;
     if (message.trim() === '') return;
-
+    setIsSending(true);
     try {
       await sendMessageStory({
         receiver: id,
@@ -353,6 +516,8 @@ const ViewStories = ({route}) => {
       }, 1000);
     } catch (error) {
       console.error('Error sending message:', error);
+    } finally {
+      setIsSending(false);
     }
     setMessage('');
     setInputHeight(40);
@@ -367,8 +532,6 @@ const ViewStories = ({route}) => {
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
   }).current;
-
-  const isAnimationPaused = editModalVisible || alertVisible || openModal;
 
   useEffect(() => {
     const loadCounterIfOwner = async () => {
@@ -475,11 +638,6 @@ const ViewStories = ({route}) => {
     checkReaction();
   }, [currentIndex, stories, DataUser.id]);
 
-  const updateProgress = (current, total) => {
-    const ratio = total > 0 ? current / total : 0;
-    progress.setValue(ratio);
-  };
-
   const handleDeleteStory = async () => {
     setAlertVisible(true); // ✅ Mostrar alert y pausar animación
     Alert.alert(
@@ -548,6 +706,47 @@ const ViewStories = ({route}) => {
     }
   };
 
+  useEffect(() => {
+    const anyModalOpen =
+      openModal || openModal2 || editModalVisible || alertVisible;
+
+    if (anyModalOpen) {
+      if (!shouldPauseAnimation.current) {
+        setIsPaused(true);
+        shouldPauseAnimation.current = true;
+
+        if (animationRef.current) {
+          animationRef.current.stop();
+          animationRef.current = null;
+        }
+      }
+    } else {
+      if (shouldPauseAnimation.current) {
+        setIsPaused(false);
+        shouldPauseAnimation.current = false;
+
+        const remaining = duration - (progressValueRef.current || 0);
+        if (remaining > 0) {
+          if (openModal || openModal2 || editModalVisible || alertVisible) {
+            console.log('⛔ No iniciar animación: modal abierto');
+            return;
+          }
+          animationRef.current = Animated.timing(progress, {
+            toValue: 1,
+            duration: remaining,
+            useNativeDriver: false,
+          });
+
+          animationRef.current.start(({finished}) => {
+            if (finished && !shouldPauseAnimation.current) {
+              goToNextStory();
+            }
+          });
+        }
+      }
+    }
+  }, [openModal, openModal2, editModalVisible, alertVisible]);
+
   const handleEditStory = async () => {
     try {
       const storyId = stories[currentIndex].id;
@@ -560,6 +759,44 @@ const ViewStories = ({route}) => {
       console.error('Error fetching story for editing:', error);
     }
   };
+
+useFocusEffect(
+  useCallback(() => {
+    // Solo reanudar si no hay modales abiertos
+    if (!openModal && !openModal2 && !editModalVisible && !alertVisible) {
+      setIsPaused(false);
+      shouldPauseAnimation.current = false;
+
+      const remaining = duration - (progressValueRef.current || 0);
+      if (remaining > 0) {
+        progress.setValue(progressValueRef.current / duration);
+        animationRef.current = Animated.timing(progress, {
+          toValue: 1,
+          duration: remaining,
+          useNativeDriver: false,
+        });
+        animationRef.current.start(({ finished }) => {
+          if (finished && !shouldPauseAnimation.current) {
+            goToNextStory();
+          }
+        });
+      }
+    }
+
+    return () => {
+      // Al salir, pausa
+      setIsPaused(true);
+      shouldPauseAnimation.current = true;
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
+    };
+  }, [openModal, openModal2, editModalVisible, alertVisible]),
+);
+
+
+
+
   if (loading) {
     return (
       <View style={styles.loaderContainer}>
@@ -580,48 +817,13 @@ const ViewStories = ({route}) => {
         {stories.length > 0 ? (
           <View style={{flex: 1}}>
             {/* BARRAS DE PROGRESO SOLO DEL USUARIO ACTUAL */}
-            <View style={styles.progressBarsWrapper}>
-              {(() => {
-                const currentStory = stories[currentIndex];
-                if (!currentStory) return null;
-
-                const userGroup = userStoryGroups.find(
-                  group => group.user.id === currentStory.user.id,
-                );
-                if (!userGroup) return null;
-
-                return (
-                  <View style={styles.progressGroup}>
-                    {userGroup.stories.map((story, idx) => {
-                      const globalIndex = stories.findIndex(
-                        s => s.id === story.id,
-                      );
-                      return (
-                        <View
-                          key={story.id || idx}
-                          style={styles.progressBarBackground}>
-                          <Animated.View
-                            style={[
-                              styles.progressBar,
-                              globalIndex === currentIndex
-                                ? {
-                                    width: progress.interpolate({
-                                      inputRange: [0, 100],
-                                      outputRange: ['0%', '100%'],
-                                    }),
-                                  }
-                                : globalIndex < currentIndex
-                                ? {width: '100%'}
-                                : {width: '0%'},
-                            ]}
-                          />
-                        </View>
-                      );
-                    })}
-                  </View>
-                );
-              })()}
-            </View>
+            <ProgressBars
+              stories={stories}
+              currentIndex={currentIndex}
+              userStoryGroups={userStoryGroups}
+              progress={progress}
+              insets={insets}
+            />
 
             {/* FLATLIST DE HISTORIAS */}
             <Animated.FlatList
@@ -642,114 +844,28 @@ const ViewStories = ({route}) => {
               snapToInterval={width}
               snapToAlignment="center"
               decelerationRate="fast"
-              renderItem={({item, index}) => {
-                const inputRange = [
-                  (index - 1) * width,
-                  index * width,
-                  (index + 1) * width,
-                ];
-
-                const rotateY = scrollX.interpolate({
-                  inputRange,
-                  outputRange: ['50deg', '0deg', '-50deg'],
-                  extrapolate: 'clamp',
-                });
-
-                const scale = scrollX.interpolate({
-                  inputRange,
-                  outputRange: [0.9, 1, 0.9],
-                  extrapolate: 'clamp',
-                });
-
-                return (
-                  <Animated.View
-                    style={[
-                      styles.storyContainer,
-                      {transform: [{rotateY}, {scale}]},
-                    ]}>
-                    {isVideo(item.storyUrl) && currentIndex === index ? (
-                      <Video
-                        ref={videoRef}
-                        source={{uri: item.storyUrl}}
-                        style={styles.storyImage}
-                        resizeMode="cover"
-                        repeat={false}
-                        paused={currentIndex !== index || isPaused}
-                        muted={false}
-                        onLoad={meta => {
-                          const durationMs = (meta.duration || 0) * 1000;
-
-                          if (
-                            index === currentIndex &&
-                            item.id &&
-                            durationMs >= 1000
-                          ) {
-                            console.log(
-                              '🎬 Video cargado con duración:',
-                              durationMs,
-                            );
-
-                            progress.setValue(0);
-
-                            if (animationRef.current) {
-                              animationRef.current.stop();
-                              animationRef.current = null;
-                            }
-
-                            animationRef.current = Animated.timing(progress, {
-                              toValue: 1,
-                              duration: durationMs,
-                              useNativeDriver: false,
-                            });
-
-                            animationRef.current.start(({finished}) => {
-                              if (finished && !isPaused) {
-                                console.log(
-                                  '⏭️ Video terminado, pasando a siguiente historia',
-                                );
-                                goToNextStory();
-                              } else {
-                                console.log('⏸️ Video pausado o interrumpido');
-                              }
-                            });
-                          }
-                        }}
-                        onEnd={() => {
-                          progress.setValue(1);
-                          goToNextStory();
-                        }}
-                      />
-                    ) : (
-                      <Image
-                        source={{uri: item.storyUrl}}
-                        style={styles.storyImage}
-                      />
-                    )}
-
-                    <View style={styles.header}>
-                      <View style={styles.userInfo}>
-                        <Image
-                          source={{uri: item.user.img}}
-                          style={styles.profileImage}
-                        />
-                        <Text style={styles.username}>
-                          {item.user.first_name} {item.user.last_name}
-                        </Text>
-                      </View>
-
-                      <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <Text style={styles.closeButton}>✖</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {item.caption ? (
-                      <View style={styles.captionContainer}>
-                        <Text style={styles.captionText}>{item.caption}</Text>
-                      </View>
-                    ) : null}
-                  </Animated.View>
-                );
-              }}
+              getItemLayout={(_, index) => ({
+                length: width, // ancho de la pantalla (asumiendo que cada historia ocupa toda la pantalla)
+                offset: width * index,
+                index,
+              })}
+              renderItem={({item, index}) => (
+                <StoryItem
+                  item={item}
+                  index={index}
+                  scrollX={scrollX}
+                  isVideo={isVideo}
+                  currentIndex={currentIndex}
+                  isPaused={isPaused}
+                  shouldPauseAnimation={shouldPauseAnimation}
+                  progress={progress}
+                  goToNextStory={goToNextStory}
+                  navigation={navigation}
+                  setIsCurrentVideo={setIsCurrentVideo}
+                  videoRef={videoRef}
+                
+                />
+              )}
             />
           </View>
         ) : (
@@ -761,264 +877,77 @@ const ViewStories = ({route}) => {
         )}
 
         {isOwner ? (
-          <View style={styles.configBar}>
-            <TouchableOpacity
-              style={styles.configButton}
-              activeOpacity={0.7}
-              onPress={() => setOpenModal(true)}>
-              <MaterialIcons name="remove-red-eye" size={24} color="#4CAF50" />
-              {isLoadingCount ? (
-                <ActivityIndicator
-                  size="small"
-                  color="#4CAF50"
-                  style={{marginTop: 4}}
-                />
-              ) : (
-                <Text style={styles.configText}>{Count}</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.configButton}
-              activeOpacity={0.7}
-              onPress={() => setOpenModal2(true)}>
-              <MaterialIcons name="favorite" size={24} color="red" />
-              {isLoadingCount ? (
-                <ActivityIndicator
-                  size="small"
-                  color="#4CAF50"
-                  style={{marginTop: 4}}
-                />
-              ) : (
-                <Text style={styles.configText}>{Count2}</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.configButton}
-              onPress={handleEditStory}
-              activeOpacity={0.7}>
-              <MaterialIcons name="edit" size={24} color="#2196F3" />
-              <Text style={styles.configText}>Editar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.configButton}
-              onPress={handleDeleteStory}
-              activeOpacity={0.7}>
-              <MaterialIcons name="delete" size={24} color="#F44336" />
-              <Text style={styles.configText}>Eliminar</Text>
-            </TouchableOpacity>
-          </View>
+          <ConfigBar
+            onViewPress={() => {
+              setOpenModal(true);
+              handleAnimationPauseState(); // detener animación al abrir
+            }}
+            onReactionsPress={() => {
+              setOpenModal2(true);
+              handleAnimationPauseState(); // detener animación al abrir
+            }}
+            onEditPress={() => {
+              handleEditStory();
+              handleAnimationPauseState(); // si handleEditStory abre modal, forzamos pausa
+            }}
+            onDeletePress={() => {
+              handleDeleteStory();
+              handleAnimationPauseState(); // opcional, por seguridad
+            }}
+            isLoadingCount={isLoadingCount}
+            Count={Count}
+            Count2={Count2}
+          />
         ) : (
           // 🔥 Si NO es el dueño, muestra la caja de mensajes
-          <View style={styles.bottomContainer}>
-            {/* Contenedor del input + botón de enviar */}
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={[styles.input, {height: Math.max(40, inputHeight)}]}
-                placeholder="Enviar mensaje..."
-                placeholderTextColor="gray"
-                value={message}
-                onChangeText={setMessage}
-                multiline
-                textAlignVertical="top"
-                onContentSizeChange={event =>
-                  setInputHeight(event.nativeEvent.contentSize.height)
-                }
-              />
-              <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
-                <FontAwesome name="send" size={22} color="white" />
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              onPress={toggleReaction}
-              style={styles.reactButton}>
-              <FontAwesome
-                name="heart"
-                size={25}
-                color={hasReacted ? 'red' : 'gray'}
-              />
-            </TouchableOpacity>
-          </View>
+          <MessageInput
+            message={message}
+            setMessage={setMessage}
+            handleSend={handleSend}
+            inputHeight={inputHeight}
+            setInputHeight={setInputHeight}
+            toggleReaction={toggleReaction}
+            hasReacted={hasReacted}
+            isSending={isSending}
+          />
         )}
 
-        <Modal
-          transparent
-          animationType="slide"
+        <EditStoryModal
           visible={editModalVisible}
-          onRequestClose={() => setEditModalVisible(false)}>
-          <View style={styles.modalContainer}>
-            <SafeAreaView style={styles.modalContent}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => setEditModalVisible(false)}>
-                <Text style={styles.closeButton}>✖</Text>
-              </TouchableOpacity>
-              <Text style={styles.title}>Editar Publicación</Text>
-
-              <View style={styles.imageSection}>
-                {editedImage ? (
-                  <View style={styles.imageWrapper}>
-                    <Image
-                      source={{uri: editedImage}}
-                      style={styles.previewImage}
-                    />
-                    <TouchableOpacity
-                      style={styles.removeButton}
-                      onPress={() => setEditedImage(null)}>
-                      <Text style={styles.removeButtonText}>Eliminar</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    onPress={pickImage}
-                    style={styles.imageButton}>
-                    <Text style={styles.addButtonText}>📷 Agregar Imagen</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <TextInput
-                style={styles.input3}
-                placeholder="Editar descripción"
-                placeholderTextColor="gray"
-                value={editedDescription}
-                onChangeText={setEditedDescription}
-                multiline={true}
-              />
-
-              <View style={{top: 20}}>
-                <TouchableOpacity
-                  onPress={handleUpdateStory}
-                  style={styles.saveButton}>
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Guardar</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setEditModalVisible(false)}
-                  style={styles.cancelButton}>
-                  <Text style={styles.cancelButtonText}>Cancelar</Text>
-                </TouchableOpacity>
-              </View>
-            </SafeAreaView>
-          </View>
-        </Modal>
-        <Modal
-          animationType="slide"
-          transparent={true}
+          onClose={() => {
+            setEditModalVisible(false);
+            handleAnimationPauseState(); // PAUSAR O REANUDAR
+          }}
+          onSave={handleUpdateStory}
+          loading={loading}
+          pickImage={pickImage}
+          editedImage={editedImage}
+          setEditedImage={setEditedImage}
+          editedDescription={editedDescription}
+          setEditedDescription={setEditedDescription}
+        />
+        <ViewersModal
           visible={openModal}
-          onRequestClose={() => setOpenModal(false)}>
-          <View style={modalstyles.modalOverlay}>
-            <View style={modalstyles.modalContainer}>
-              <Text style={modalstyles.modalTitle}>Visto por</Text>
+          onClose={() => {
+            setOpenModal(false);
+            handleAnimationPauseState(); // PAUSAR O REANUDAR
+          }}
+          users={ViewUsers}
+          onNavigate={handleNavigate}
+        />
 
-              {ViewUsers.length > 0 ? (
-                <FlatList
-                  data={ViewUsers}
-                  keyExtractor={item => item.id.toString()}
-                  renderItem={({item}) => (
-                    <TouchableOpacity
-                      style={modalstyles.userItem}
-                      onPress={() => handleNavigate(item.id)}>
-                      <Image
-                        source={{
-                          uri: item.img
-                            ? item.img
-                            : 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
-                        }}
-                        style={modalstyles.profileImage}
-                      />
-                      <View style={{marginLeft: 10}}>
-                        <Text style={modalstyles.userName}>
-                          {item.first_name} {item.last_name}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                  style={{maxHeight: '80%'}}
-                />
-              ) : (
-                <Text style={modalstyles.emptyText}>
-                  Nadie ha visto esta historia aún.
-                </Text>
-              )}
-
-              <TouchableOpacity
-                style={modalstyles.closeButton}
-                onPress={() => setOpenModal(false)}>
-                <Text style={modalstyles.closeButtonText}>Cerrar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal
-          animationType="slide"
-          transparent={true}
+        <ReactionsModal
           visible={openModal2}
-          onRequestClose={() => setOpenModal2(false)}>
-          <View style={modalstyles.modalOverlay}>
-            <View style={modalstyles.modalContainer}>
-              <Text style={modalstyles.modalTitle}>Reaccionado por </Text>
-
-              {ViewUsers2.length > 0 ? (
-                <FlatList
-                  data={ViewUsers2}
-                  keyExtractor={item => item.id.toString()}
-                  renderItem={({item}) => (
-                    <TouchableOpacity
-                      style={modalstyles.userItem}
-                      onPress={() => handleNavigate(item.id)}>
-                      <Image
-                        source={{
-                          uri: item.img
-                            ? item.img
-                            : 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
-                        }}
-                        style={modalstyles.profileImage}
-                      />
-                      <View style={{marginLeft: 10}}>
-                        <Text style={modalstyles.userName}>
-                          {item.first_name} {item.last_name}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                  style={{maxHeight: '80%'}}
-                />
-              ) : (
-                <Text style={modalstyles.emptyText}>
-                  Nadie ha reaccionado a esta historia aún.
-                </Text>
-              )}
-
-              <TouchableOpacity
-                style={modalstyles.closeButton}
-                onPress={() => setOpenModal2(false)}>
-                <Text style={modalstyles.closeButtonText}>Cerrar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+          onClose={() => {
+            setOpenModal2(false);
+            handleAnimationPauseState(); // PAUSAR O REANUDAR
+          }}
+          users={ViewUsers2}
+          onNavigate={handleNavigate}
+        />
 
         {sendingStatus === 'sent' && (
-          <View
-            style={{
-              position: 'absolute',
-              top: '45%',
-              alignSelf: 'center',
-              backgroundColor: '#000',
-              paddingVertical: 12,
-              paddingHorizontal: 24,
-              borderRadius: 20,
-              opacity: 0.9,
-              zIndex: 10,
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}>
+          <View style={styles.sendingStatus}>
             <Text style={{color: 'white', fontSize: 16, fontWeight: '600'}}>
               Respuesta enviada
             </Text>
@@ -1029,444 +958,32 @@ const ViewStories = ({route}) => {
   );
 };
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: 'black'},
-  loaderContainer: {
+  /* esta */ container: {flex: 1, backgroundColor: 'black'},
+  /* esta */ loaderContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'black',
   },
-  userName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: 'white',
-  },
 
-  reactButton: {
-    padding: 10,
-    borderRadius: 30,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
-    right: 20,
-    backgroundColor: 'black',
-  },
-  progressBarsWrapper: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    zIndex: 10,
-  },
-  progressGroup: {
-    flexDirection: 'row',
-  },
-  progressBarBackground: {
-    flex: 1,
-    height: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 1,
-  },
-  progressBar: {
-    height: 2,
-    backgroundColor: 'white',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  configBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#1e1e1e',
-    paddingVertical: 10,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: -3},
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-
-  configButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-
-  configText: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  storyContainer: {
+  /* esta */ noStoriesContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    perspective: 1500,
   },
-  storyImage: {width, height: height - 30, resizeMode: 'cover'},
-  header: {
+  /* esta */ noStoriesText: {color: 'white', fontSize: 16},
+  sendingStatus: {
     position: 'absolute',
-    top: 30,
-    left: 10,
-    right: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  userInfo: {flexDirection: 'row', alignItems: 'center'},
-  profileImage: {width: 40, height: 40, borderRadius: 20, marginRight: 10},
-  username: {
-    color: 'black',
-    fontWeight: 'bold',
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-  },
-  timestamp: {color: 'gray', fontSize: 12, marginLeft: 5},
-  closeButton: {color: 'white', fontSize: 24, fontWeight: 'bold'},
-  noStoriesContainer: {flex: 1, justifyContent: 'center', alignItems: 'center'},
-  noStoriesText: {color: 'white', fontSize: 16},
-  bottomContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 10,
-    right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  likeButton: {backgroundColor: 'transparent', padding: 10},
-  likeText: {fontSize: 32, color: 'white'},
-  liked: {color: 'red'},
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: '#1c1c1e',
-    borderRadius: 25,
-    paddingHorizontal: 15,
-    paddingVertical: 6,
-    margin: 10,
-    width: '87%',
-    right: 17,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: 'white',
-    paddingHorizontal: 10,
-    paddingTop: Platform.OS === 'ios' ? 10 : 6,
-    paddingBottom: Platform.OS === 'ios' ? 10 : 6,
-    borderRadius: 20,
-  },
-  sendButton: {
-    backgroundColor: '#914cf0',
-    borderRadius: 20,
-    padding: 10,
-    marginLeft: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonText: {color: 'white', fontSize: 18, fontWeight: 'bold'},
-  progressBarContainer: {
-    height: 5,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    width: '100%',
-    position: 'absolute',
-    top: 10,
-  },
-  progressBar: {height: 5, backgroundColor: 'white'},
-  ownerOptionsContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 10,
-    right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 15,
-    borderRadius: 15,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 8,
-  },
-  iconButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconText: {
-    color: 'white',
-    fontSize: 18,
-  },
-  input3: {
-    color: 'black',
-    fontSize: 16,
-    backgroundColor: '#F0F0F0',
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CCCCCC',
-    marginBottom: 15,
-    textAlignVertical: 'top',
-    height: 50,
-  },
-
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.8)',
-  },
-  modalContainer2: {
-    width: '90%',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    maxHeight: '80%',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 15,
-    width: '90%',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 1,
-  },
-  closeButton: {
-    fontSize: 24,
-    color: '#333',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  imageSection: {
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  imageWrapper: {
-    position: 'relative',
-  },
-  previewImage: {
-    width: 250,
-    height: 250,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  removeButton: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 5,
-    borderRadius: 5,
-  },
-  removeButtonText: {
-    color: '#fff',
-    fontSize: 12,
-  },
-  imageButton: {
-    padding: 10,
-    backgroundColor: '#007BFF',
-    borderRadius: 5,
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-
-  saveButton: {
-    backgroundColor: '#28a745',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  cancelButton: {
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-
-  cancelButtonText: {
-    color: 'red',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  iconText: {
-    color: '#fff',
-    fontSize: 14,
-    marginTop: 5,
-    fontWeight: '500',
-  },
-  captionContainer: {
-    position: 'absolute',
-    bottom: 90,
-    left: 20,
-    right: 20,
-    padding: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFFFFF80',
-  },
-  captionText: {
-    color: 'black',
-    fontSize: 16,
-    textAlign: 'center',
-
-    flexWrap: 'wrap',
-    fontFamily: 'Poppins-Light',
-  },
-  audioCardWhite: {
-    backgroundColor: '#f9f9f9',
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 6},
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 8,
-    alignItems: 'center',
-    marginBottom: 24,
-    width: '80%',
-  },
-  gifWrapperWhite: {
-    width: 220,
-    height: 220,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  audioGif: {
-    width: '100%',
-    height: '100%',
-  },
-
-  progressBarFillCustom: {
-    height: '100%',
-    backgroundColor: '#914cf0', // o el color que tú prefieras
-  },
-  timeRowWhite: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '80%',
-  },
-  timeTextWhite: {
-    fontSize: 12,
-    color: '#444',
-  },
-  progressBarCustom: {
-    width: '80%',
-    height: 4,
-    backgroundColor: 'black', // 👈 temporal
-    marginBottom: 8,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-});
-
-const modalstyles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end', // Mostrar desde abajo
-    alignItems: 'center',
-  },
-  modalContainer: {
-    width: '100%',
-    backgroundColor: 'black',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '70%',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
-    color: 'white',
-  },
-  userItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    top: '45%',
+    alignSelf: 'center',
+    backgroundColor: '#000',
     paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#ccc',
-    textAlign: 'center',
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-    fontFamily: 'Poppins-Bold',
-  },
-  profileImage: {
-    width: 40,
-    height: 40,
+    paddingHorizontal: 24,
     borderRadius: 20,
-  },
-  closeButton: {
-    marginTop: 10,
-    backgroundColor: '#944af5',
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  closeButtonText: {
-    textAlign: 'center',
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#777',
-    marginTop: 10,
+    opacity: 0.9,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
 

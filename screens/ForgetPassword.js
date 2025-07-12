@@ -8,6 +8,7 @@ import { validateInput } from '../utils/actions/formActions';
 import { reducer } from '../utils/reducers/formReducers';
 import { postHttps } from '../api/axios';
 import Header from '../components/Header';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const initialState = {
   inputValues: { email: '' },
@@ -100,7 +101,7 @@ const ForgetPassword = ({ navigation }) => {
             placeholder="example@gmail.com"
             placeholderTextColor="#ccc"
             keyboardType="email-address"
-            icon={icons.email}
+             iconComponent={<MaterialIcons name="email" size={20} color="#ccc" />}
           />
         </View>
         <Button title="Enviar" filled onPress={sendResetEmail} loading={isLoading} />

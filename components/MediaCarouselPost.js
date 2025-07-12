@@ -6,7 +6,17 @@ import VideoPost from './VideoPost';
 const ITEM_WIDTH = Dimensions.get('window').width - 40;
 const FIXED_HEIGHT = 450;
 
-const MediaCarousel = ({ images,thumbnails ,feedId, visibleFeedId, isScreenFocused, setCurrentImages, setImageIndex, setImageViewVisible,  isModalVisible}) => {
+const MediaCarouselPost = ({
+  images,
+  thumbnails,
+  feedId,
+  visibleFeedId,
+  isScreenFocused,
+  setCurrentImages,
+  setImageIndex,
+  setImageViewVisible,
+  isModalVisible,
+}) => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -18,6 +28,46 @@ const MediaCarousel = ({ images,thumbnails ,feedId, visibleFeedId, isScreenFocus
 
   const isMultiple = images.length > 1;
   const isVisible = visibleFeedId === feedId;
+
+  const renderMedia = (item, index) => {
+    const shouldPlay = isVisible && activeImageIndex === index && isScreenFocused && !isModalVisible;
+   console.log({
+  isVisible,
+  activeImageIndex,
+  index,
+  isScreenFocused,
+  isModalVisible,
+});
+    const isVideoItem = isVideo(item);
+    const thumbnailUri = thumbnails?.[index];
+
+    if (isVideoItem && shouldPlay) {
+      return (
+        <VideoPost
+          key={`${feedId}-${index}`}
+          videoUrl={item}
+          thumbnails={thumbnailUri}
+          isVisible={true}
+          shouldPause={!shouldPlay}
+          style={{ width: ITEM_WIDTH, height: FIXED_HEIGHT }}
+        />
+      );
+    }
+
+    return (
+      <>
+        {loading && <ActivityIndicator size="large" color="#ffffff" style={StyleSheet.absoluteFill} />}
+        <FastImage
+          source={{ uri: isVideoItem && thumbnailUri ? thumbnailUri : item }}
+          style={{ width: ITEM_WIDTH, height: FIXED_HEIGHT }}
+          resizeMode={FastImage.resizeMode.contain}
+          onLoadStart={() => setLoading(true)}
+          onLoadEnd={() => setLoading(false)}
+          onError={() => setLoading(false)}
+        />
+      </>
+    );
+  };
 
   if (isMultiple) {
     return (
@@ -35,41 +85,21 @@ const MediaCarousel = ({ images,thumbnails ,feedId, visibleFeedId, isScreenFocus
             const index = Math.round(event.nativeEvent.contentOffset.x / ITEM_WIDTH);
             setActiveImageIndex(index);
           }}
-          renderItem={({ item, index }) => {
-            const shouldShowVideo = isVisible && activeImageIndex === index;
-            return (
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={() => {
-                  setCurrentImages(images);
-                  setImageIndex(index);
-                  setImageViewVisible(true);
-                }}>
-                <View style={styles.mediaWrapper}>
-                  {isVideo(item) && shouldShowVideo ? (
-                    <VideoPost
-                      key={`${feedId}-${index}-${isVisible ? 'visible' : 'hidden'}`}
-                      videoUrl={item}
-                      isVisible={true}
-                      style={{ width: ITEM_WIDTH, height: FIXED_HEIGHT }}
-                     shouldPause={!isVisible || !isScreenFocused || isModalVisible}
-                    />
-                  ) : (
-                    <FastImage
-                      source={{ uri: item }}
-                      style={{ width: ITEM_WIDTH, height: FIXED_HEIGHT }}
-                      resizeMode={FastImage.resizeMode.contain}
-                    />
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          }}
+          renderItem={({ item, index }) => (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                setCurrentImages(images);
+                setImageIndex(index);
+                setImageViewVisible(true);
+              }}>
+              <View style={styles.mediaWrapper}>{renderMedia(item, index)}</View>
+            </TouchableOpacity>
+          )}
           initialNumToRender={1}
           maxToRenderPerBatch={1}
           windowSize={2}
         />
-
         <View style={styles.counter}>
           <Text style={styles.counterText}>{`${activeImageIndex + 1}/${images.length}`}</Text>
         </View>
@@ -79,35 +109,13 @@ const MediaCarousel = ({ images,thumbnails ,feedId, visibleFeedId, isScreenFocus
 
   return (
     <TouchableOpacity
+      activeOpacity={0.9}
       onPress={() => {
         setCurrentImages(images);
         setImageIndex(0);
         setImageViewVisible(true);
       }}>
-      <View style={styles.mediaWrapper}>
-        {isVideo(images[0]) && isVisible ? (
-          <VideoPost
-            key={`${feedId}-0`}
-            videoUrl={images[0]}
-            thumbnails={thumbnails[0]}
-            isVisible={true}
-          
-             shouldPause={!isVisible || !isScreenFocused || isModalVisible}
-          />
-        ) : (
-          <>
-            {loading && <ActivityIndicator size="large" color="#ffffff" style={StyleSheet.absoluteFill} />}
-            <FastImage
-              source={{ uri: images[0] }}
-              style={{ width: Dimensions.get('window').width * 0.95, aspectRatio: 0.8 }}
-              resizeMode={FastImage.resizeMode.contain}
-              onLoadStart={() => setLoading(true)}
-              onLoadEnd={() => setLoading(false)}
-              onError={() => setLoading(false)}
-            />
-          </>
-        )}
-      </View>
+      <View style={styles.mediaWrapper}>{renderMedia(images[0], 0)}</View>
       <View style={styles.counter}>
         <Text style={styles.counterText}>1/1</Text>
       </View>
@@ -141,4 +149,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MediaCarousel;
+export default MediaCarouselPost;

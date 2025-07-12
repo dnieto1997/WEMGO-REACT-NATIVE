@@ -1,12 +1,13 @@
 import { View, Text, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SIZES, FONTS, icons } from '../constants';
+import { COLORS, SIZES, icons } from '../constants';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { validateInput } from '../utils/actions/formActions';
 import { reducer } from '../utils/reducers/formReducers';
 import { patchHttps } from '../api/axios';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const initialState = {
   inputValues: {
@@ -40,7 +41,7 @@ const ChangePassword2 = ({ navigation, route }) => {
 
   useEffect(() => {
     if (error) {
-      Alert.alert('An error occurred', error);
+          Alert.alert('Ocurrió un error', error);
     }
   }, [error]);
 
@@ -48,12 +49,12 @@ const ChangePassword2 = ({ navigation, route }) => {
     const { newPassword, confirmNewPassword } = formState.inputValues;
 
     if (newPassword !== confirmNewPassword) {
-      Alert.alert('Error', 'Passwords do not match. Please try again.');
+      Alert.alert('Error', 'Las contraseñas no coinciden. Inténtalo de nuevo.');
       return;
     }
 
     if (!formState.formIsValid) {
-      Alert.alert('Invalid Input', 'Please ensure all fields are valid.');
+       Alert.alert('Campos inválidos', 'Por favor, asegúrate de que todos los campos sean válidos.');
       return;
     }
 
@@ -70,15 +71,15 @@ const ChangePassword2 = ({ navigation, route }) => {
 
 
       if (response.status !== 200) {
-        throw new Error('Failed to update password. Please try again.');
+        throw new Error('No se pudo actualizar la contraseña. Inténtalo nuevamente.');
       }
 
-      Alert.alert('Success', 'Your password has been updated successfully.');
+            Alert.alert('Éxito', 'Tu contraseña ha sido actualizada correctamente.');
       navigation.navigate('Login');
     } catch (err) {
       console.log(err)
       console.error(err.message);
-      setError(err.message || 'Something went wrong.');
+      setError(err.message || 'Algo salió mal.');
     } finally {
       setIsLoading(false);
     }
@@ -89,35 +90,37 @@ const ChangePassword2 = ({ navigation, route }) => {
       <View style={styles.container}>
         <View style={styles.headerContainer}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconContainer}>
-            <Image source={icons.back} style={styles.back} />
+            <MaterialIcons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Change Password</Text>
+          <Text style={styles.headerTitle}>Cambiar Contraseña</Text>
         </View>
         <View style={styles.formContainer}>
-          <Input
-            id="newPassword"
-            onChangeText={(text) => inputChangedHandler('newPassword', text)} // Pass value correctly
-            value={formState.inputValues.newPassword} // Bind value to input
-            errorText={'Please enter a valid password.'}
-            autoCapitalize="none"
-            placeholder="New Password"
-            placeholderTextColor={COLORS.black}
-            secureTextEntry={true}
-            icon={icons.lock}
-          />
-          <Input
-            id="confirmNewPassword"
-            onChangeText={(text) => inputChangedHandler('confirmNewPassword', text)} // Pass value correctly
-            value={formState.inputValues.confirmNewPassword} // Bind value to input
-            errorText={
-              !formState.inputValidities['confirmNewPassword'] ? 'Passwords must match.' : null
-            }
-            autoCapitalize="none"
-            placeholder="Confirm New Password"
-            placeholderTextColor={COLORS.black}
-            secureTextEntry={true}
-            icon={icons.lock}
-          />
+        <Input
+  id="newPassword"
+  onChangeText={(text) => inputChangedHandler('newPassword', text)}
+  value={formState.inputValues.newPassword}
+  errorText={'Por favor, ingresa una contraseña válida.'}
+  autoCapitalize="none"
+  placeholder="Nueva contraseña"
+  placeholderTextColor={COLORS.black}
+  secureTextEntry={true}
+  iconComponent={<MaterialIcons name="lock" size={20} color={COLORS.black} />}
+/>
+     <Input
+  id="confirmNewPassword"
+  onChangeText={(text) => inputChangedHandler('confirmNewPassword', text)}
+  value={formState.inputValues.confirmNewPassword}
+  errorText={
+    !formState.inputValidities['confirmNewPassword']
+      ? 'Las contraseñas deben coincidir.'
+      : null
+  }
+  autoCapitalize="none"
+  placeholder="Confirmar nueva contraseña"
+  placeholderTextColor={COLORS.black}
+  secureTextEntry={true}
+  iconComponent={<MaterialIcons name="lock" size={20} color={COLORS.black} />}
+/>
         </View>
         <Button
           title="Save Now!"

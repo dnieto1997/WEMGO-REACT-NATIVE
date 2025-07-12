@@ -14,13 +14,14 @@ const SocketProvider = ({ children }) => {
 
   const connectSocket = async () => {
     const BASE_URL = 'https://wemgo.online';
-    //const BASE_URL = 'http://192.168.1.3:3002';
+    //const BASE_URL = 'http://192.168.1.12:3002';
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token || socketRef.current) return;
 
       const newSocket = io(BASE_URL, {
         auth: { token: `Bearer ${token}` },
+        path: '/wemgo-sockettest/socket.io',
         transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: 10,

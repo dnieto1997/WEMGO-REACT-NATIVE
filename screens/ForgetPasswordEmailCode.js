@@ -5,6 +5,7 @@ import Button from '../components/Button';
 import OTPTextInput from 'react-native-otp-textinput';
 import { SIZES, icons } from '../constants';
 import { postHttps } from '../api/axios';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const ForgetPasswordEmailCode = ({ navigation, route }) => {
   const { email } = route.params;
@@ -84,7 +85,7 @@ const ForgetPasswordEmailCode = ({ navigation, route }) => {
       <View style={styles.container}>
         <View style={styles.headerContainer}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerIconContainer}>
-            <Image source={icons.back} style={styles.back} />
+           <MaterialIcons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Validar código</Text>
         </View>
