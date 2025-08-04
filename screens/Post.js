@@ -16,6 +16,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Dimensions,
+  Share,
 } from 'react-native';
 import {getHttps, postHttps} from '../api/axios';
 import {SocketContext} from '../context/SocketContext';
@@ -27,11 +28,10 @@ import CommentItem from '../components/CommentItem';
 import ImageViewerModal from '../components/ModalImage';
 import Likes from '../components/Likes';
 import Tab from '../components/Tab';
-import MediaCarousel from '../components/MediaCarousel';
 import {useFocusEffect} from '@react-navigation/native';
 import {COLORS, SIZES} from '../constants';
 import MediaCarouselPost from '../components/MediaCarouselPost';
-
+import {useIsFocused} from '@react-navigation/native';
 
 const Post = ({navigation, route}) => {
   const {id} = route.params;
@@ -54,7 +54,7 @@ const Post = ({navigation, route}) => {
   const flatListRef = useRef(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isReady, setIsReady] = useState(false);
-  
+  const isScreenFocused = useIsFocused();
 
   const {listenForReactions, sendReactionNotification} =
     useContext(SocketContext);
@@ -82,26 +82,24 @@ const Post = ({navigation, route}) => {
     }, [route.params?.refresh]),
   );
 
-const fetchFeed = useCallback(async () => {
-  if (!id) return;
-  setIsLoading(true);
-  setIsReady(false); // 👈 reiniciar antes de nueva carga
+  const fetchFeed = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    setIsReady(false); // 👈 reiniciar antes de nueva carga
 
-  try {
-    const response = await getHttps(`feed/${id}`);
-    const { feeds: data, selectedIndex } = response.data;
-    setFeeds(data);
-    setSelectedIndex(selectedIndex);
-    setIsReady(true); // ✅ listo para renderizar
-  } catch (error) {
-    if (error?.status === 401) navigation.navigate('Login');
-  } finally {
-    setIsLoading(false);
-  }
-}, [id]);
+    try {
+      const response = await getHttps(`feed/${id}`);
+      const {feeds: data, selectedIndex} = response.data;
 
-
-
+      setFeeds(data);
+      setSelectedIndex(selectedIndex);
+      setIsReady(true); // ✅ listo para renderizar
+    } catch (error) {
+      if (error?.status === 401) navigation.navigate('Login');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
 
   const handleCloseModal = () => {
     setModalVisible(false);
@@ -156,16 +154,28 @@ const fetchFeed = useCallback(async () => {
     [feeds, likeLoading, DataUser.id],
   );
 
-const onViewRef = useRef(({ viewableItems }) => {
-  if (viewableItems && viewableItems.length > 0) {
-    const firstVisibleItem = viewableItems[0];
-    if (firstVisibleItem?.item?.feed_id) {
-      setVisibleFeedId(firstVisibleItem.item.feed_id);
+  const onViewRef = useRef(({viewableItems}) => {
+    if (viewableItems && viewableItems.length > 0) {
+      const firstVisibleItem = viewableItems[0];
+      if (firstVisibleItem?.item?.feed_id) {
+        setVisibleFeedId(firstVisibleItem.item.feed_id);
+      }
     }
-  }
-});
+  });
 
-const viewConfigRef = useRef({ itemVisiblePercentThreshold: 70 });
+  const handleShareProfile = async id => {
+    try {
+      const {data} = await getHttps(`shortlink/generate?type=feed&id=${id}`);
+
+      await Share.share({
+        message: `Mira esta Publicacion en Wemgo:\n${data.url}`,
+      });
+    } catch (err) {
+      console.error('Error compartir el feed:', err);
+    }
+  };
+
+  const viewConfigRef = useRef({itemVisiblePercentThreshold: 70});
 
   const parsedUserPosts = useMemo(() => {
     if (!Array.isArray(feeds)) return [];
@@ -183,95 +193,106 @@ const viewConfigRef = useRef({ itemVisiblePercentThreshold: 70 });
   };
 
   const renderItem = ({item}) => (
-  <View style={styles.postContainer}>
-    <TouchableOpacity
-      onPress={() =>
-        navigation.navigate(
-          DataUser.id === item.userId ? 'Profile' : 'FriendTimeline',
-          {id: item.userId},
-        )
-      }>
-      <View style={styles.header}>
-        <Image source={{uri: item.users_img}} style={styles.imgProfile} />
-        <Text style={styles.profileName}>
-          {item.users_first_name} {item.users_last_name}
-        </Text>
-      </View>
-    </TouchableOpacity>
-
- {item.mediaList.length > 0 && (
-  <MediaCarouselPost
-    images={item.mediaList}
-    thumbnails={(() => {
-      try {
-        return item.feed_thumbnail ? JSON.parse(item.feed_thumbnail) : [];
-      } catch {
-        return [];
-      }
-    })()}
-    feedId={item.feed_id}
-    visibleFeedId={visibleFeedId}
-    isScreenFocused={true}
-    isModalVisible={isModalVisible}
-    setCurrentImages={setCurrentImages}
-    setImageIndex={setImageIndex}
-    setImageViewVisible={setImageViewVisible}
-  />
-)}
-
-
-    <View style={styles.interactionRow}>
+    <View style={styles.postContainer}>
       <TouchableOpacity
-        onPress={() => handleClick(item.feed_id)}
-        disabled={likeLoading[item.feed_id]}>
-        <MaterialCommunityIcons
-          name="cards-heart-outline"
-          size={30}
-          color={item.userLiked ? 'red' : 'gray'}
+        onPress={() =>
+          navigation.navigate(
+            DataUser.id === item.userId ? 'Profile' : 'FriendTimeline',
+            {id: item.userId},
+          )
+        }>
+        <View style={styles.header}>
+          <Image source={{uri: item.users_img}} style={styles.imgProfile} />
+          <Text style={styles.profileName}>
+            {item.users_first_name} {item.users_last_name}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      {item.mediaList.length > 0 && (
+        <MediaCarouselPost
+          images={item.mediaList}
+          thumbnails={(() => {
+            try {
+              return item.feed_thumbnail ? JSON.parse(item.feed_thumbnail) : [];
+            } catch {
+              return [];
+            }
+          })()}
+          feedId={item.feed_id}
+          visibleFeedId={visibleFeedId}
+          isScreenFocused={isScreenFocused}
+          isModalVisible={isModalVisible}
+          setCurrentImages={setCurrentImages}
+          setImageIndex={setImageIndex}
+          setImageViewVisible={setImageViewVisible}
         />
-      </TouchableOpacity>
-      <TouchableOpacity
-        onPress={() => {
-          setUserFeedId(item.userId);
-          setCurrentFeedId(item.feed_id);
-          setModalVisible2(true);
-        }}>
-        <Text style={styles.likeText}>{item.likeCount}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        onPress={() => {
-          setCommentFeedId(item.feed_id);
-          setModalVisible(true);
-        }}
-        style={styles.iconWithCount}>
-        <MaterialCommunityIcons name="comment" size={26} color="white" />
-        <Text style={styles.iconCount}>{item.commentCount}</Text>
-      </TouchableOpacity>
+      )}
+
+      <View style={styles.interactionRow}>
+        {/* Like */}
+        <TouchableOpacity
+          onPress={() => handleClick(item.feed_id)}
+          disabled={likeLoading[item.feed_id]}
+          style={styles.iconWithCount}>
+          <MaterialCommunityIcons
+            name="cards-heart-outline"
+            size={26}
+            color={item.userLiked ? 'red' : 'gray'}
+          />
+          <Text style={styles.iconCount}>{item.likeCount}</Text>
+        </TouchableOpacity>
+
+        {/* Comentarios */}
+        <TouchableOpacity
+          onPress={() => {
+            setCommentFeedId(item.feed_id);
+            setModalVisible(true);
+          }}
+          style={styles.iconWithCount}>
+          <MaterialCommunityIcons name="comment" size={26} color="white" />
+          <Text style={styles.iconCount}>{item.commentCount}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            handleShareProfile(item.feed_id);
+          }}
+          style={styles.commentContainer}>
+          <Ionicons name="share-social-outline" size={30} color="white" />
+        </TouchableOpacity>
+
+        {/* Vistas */}
+        {item.feed_isVideo === '1' && item.viewsCount !== undefined && (
+          <View style={styles.iconWithCount}>
+            <MaterialCommunityIcons name="eye" size={26} color="white" />
+            <Text style={styles.iconCount}>{item.viewsCount}</Text>
+          </View>
+        )}
+      </View>
+
+      <Text style={styles.profileName}>
+        {item.users_first_name} {item.users_last_name}
+      </Text>
+      <Text
+        numberOfLines={expandedDescriptions[item.feed_id] ? undefined : 2}
+        style={styles.eventAddress}>
+        {item.feed_description}
+      </Text>
+
+      {item.feed_description?.length > 50 && (
+        <TouchableOpacity onPress={() => toggleDescription(item.feed_id)}>
+          <Text style={{color: 'white', fontSize: 12}}>
+            Ver {expandedDescriptions[item.feed_id] ? 'menos' : 'más'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      <Text style={styles.dateText}>
+        {moment(item.feed_date_publication).format('D MMMM')}
+      </Text>
     </View>
-
-    <Text style={styles.profileName}>
-      {item.users_first_name} {item.users_last_name}
-    </Text>
-    <Text
-      numberOfLines={expandedDescriptions[item.feed_id] ? undefined : 2}
-      style={styles.eventAddress}>
-      {item.feed_description}
-    </Text>
-
-    {item.feed_description?.length > 50 && (
-      <TouchableOpacity onPress={() => toggleDescription(item.feed_id)}>
-        <Text style={{color: 'white', fontSize: 12}}>
-          Ver {expandedDescriptions[item.feed_id] ? 'menos' : 'más'}
-        </Text>
-      </TouchableOpacity>
-    )}
-
-    <Text style={styles.dateText}>
-      {moment(item.feed_date_publication).format('D MMMM')}
-    </Text>
-  </View>
-);
-
+  );
 
   if (isLoading && !feeds.length) {
     return (
@@ -286,47 +307,46 @@ const viewConfigRef = useRef({ itemVisiblePercentThreshold: 70 });
     <SafeAreaView style={styles.area}>
       <View style={styles.container}>
         <View style={{paddingTop: 20, paddingHorizontal: 10}}>
-  <View style={styles.container2}>
-    <TouchableOpacity
-      onPress={() => navigation.goBack()}
-      style={styles.iconContainer}>
-      <Ionicons name="arrow-back" size={22} color={COLORS.black} />
-    </TouchableOpacity>
-    <Text style={styles.title}>Publicaciones</Text>
-    <View style={{width: 30}} />
-  </View>
-</View>
-{isReady && (
-  <FlatList
-    ref={flatListRef}
-    data={parsedUserPosts}
-    keyExtractor={item => `${item.feed_id}`}
-    renderItem={renderItem}
-    initialNumToRender={10}
-    windowSize={5}
-    initialScrollIndex={selectedIndex}
-    getItemLayout={(data, index) => ({
-      length: 600,
-      offset: 600 * index,
-      index,
-    })}
-onViewableItemsChanged={onViewRef.current}
-
-  viewabilityConfig={viewConfigRef.current}
-    onScrollToIndexFailed={({ index }) => {
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index,
-          viewPosition: 0.5,
-          animated: false,
-        });
-      }, 300);
-    }}
-  />
-)}
+          <View style={styles.container2}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.iconContainer}>
+              <Ionicons name="arrow-back" size={22} color={COLORS.black} />
+            </TouchableOpacity>
+            <Text style={styles.title}>Publicaciones</Text>
+            <View style={{width: 30}} />
+          </View>
+        </View>
+        {isReady && (
+          <FlatList
+            ref={flatListRef}
+            data={parsedUserPosts}
+            keyExtractor={item => `${item.feed_id}`}
+            renderItem={renderItem}
+            initialNumToRender={10}
+            windowSize={5}
+            initialScrollIndex={selectedIndex}
+            getItemLayout={(data, index) => ({
+              length: 600,
+              offset: 600 * index,
+              index,
+            })}
+            onViewableItemsChanged={onViewRef.current}
+            viewabilityConfig={viewConfigRef.current}
+            onScrollToIndexFailed={({index}) => {
+              setTimeout(() => {
+                flatListRef.current?.scrollToIndex({
+                  index,
+                  viewPosition: 0.5,
+                  animated: false,
+                });
+              }, 300);
+            }}
+          />
+        )}
       </View>
 
-  {/*     <ImageViewerModal
+      {/*     <ImageViewerModal
         visible={isImageViewVisible}
         images={currentImages}
         index={imageIndex}
@@ -366,7 +386,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
-   
   },
   loadingContainer: {
     flex: 1,

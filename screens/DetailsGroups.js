@@ -1,3 +1,10 @@
+// Utilidad para formatear fecha tipo "2025-07-17T12:34:56Z" a "dd/MM/yyyy"
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  if (isNaN(date)) return dateString;
+  return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
 import React, { useCallback, useContext, useEffect, useState } from 'react';
 import {
   View,
@@ -20,21 +27,19 @@ import Header from '../components/Header';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SocketContext } from '../context/SocketContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import FastImage from 'react-native-fast-image';
 
 const { width } = Dimensions.get('window');
 
-const DetailsParches = ({ route }) => {
+const DetailsGroups = ({ route }) => {
   const navigation = useNavigation();
   const { id } = route.params;
-
   const [parche, setParche] = useState(null);
   const [loading, setLoading] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
   const [dataUser, setDataUser] = useState({});
-
   const [showAddMembers, setShowAddMembers] = useState(false);
   const [addableUsers, setAddableUsers] = useState([]);
+  const [selectedToAdd, setSelectedToAdd] = useState([]);
   const [searchUser, setSearchUser] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selected, setSelected] = useState([]);
@@ -42,9 +47,6 @@ const DetailsParches = ({ route }) => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
-  const {width: windowWidth} = Dimensions.get('window');
-  const ITEM_WIDTH = windowWidth - 40;
-const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, height: 400 });
   const insets = useSafeAreaInsets();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
@@ -57,8 +59,6 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
       navigation.goBack();
     }
   }, [id]);
-
-
 
   const loadUserData = useCallback(async () => {
     try {
@@ -75,6 +75,7 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
     setLoading(true);
     try {
       const response = await getHttps(`parches/${id}`);
+      
       setParche(response.data);
     } catch (error) {
       console.error(error);
@@ -98,7 +99,6 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
     setTotalPages(1);
     setAddableUsers([]);
     fetchAddableUsers(1);
-
   };
   const fetchAddableUsers = async (pageToLoad = 1) => {
     if (loadingUsers || loadingMore) return;
@@ -110,7 +110,7 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
         `followers/addparcheuser?page=${pageToLoad}&limit=200&parcheid=${id}&event_id=${parche.event_id}`,
       );
 
-      console.log(response.data);
+      //console.log(response.data);
 
       const newUsers = response?.data?.users || [];
       const total = response?.data?.totalPages || 1;
@@ -139,9 +139,9 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
         parcheid: parche.id
       };
 
-      console.log(payload)
+      //console.log(payload)
       const response = await postHttps('parche-user/enviarinvitacion', payload);
-      console.log(response.data)
+      //console.log(response.data)
 
       sendInvitationNotification?.({
         parchId: id,
@@ -265,22 +265,14 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
     }
   };
 
-  useEffect(() => {
-  if (!showAddMembers) {
-    // Si se cerró el modal, actualiza el parche
-    fetchParche();
-  }
-}, [showAddMembers]);
+    useEffect(() => {
+    if (!showAddMembers) {
+      // Si se cerró el modal, actualiza el parche
+      fetchParche();
+    }
+  }, [showAddMembers]);
   const renderImage = ({ item }) => (
-   <FastImage
-  source={{ uri: item }}
-  style={{
-    width: imageDimensions.width,
-    height: imageDimensions.height,
-    borderRadius: 16,
-  }}
-  resizeMode={FastImage.resizeMode.cover}
-/>
+    <Image source={{ uri: item }} style={styles.eventImage} />
   );
   if (loading || !parche) {
     return (
@@ -294,12 +286,10 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
     ? JSON.parse(parche.eventData.img)
     : [];
 
-
-
   return (
-    <ScrollView style={[styles.container, { paddingTop: insets.top }]} contentContainerStyle={{ paddingBottom: 20  }}>
+    <ScrollView style={[styles.container, { paddingTop: insets.top }]} contentContainerStyle={{ paddingBottom: 100 }}>
       <View style={{ top: 10, left: 10 }}>
-        <Header title="Parche" />
+        <Header title={parche.name} onBack={() => navigation.goBack()} />
       </View>
 
       <View style={{ top: 10 }}>
@@ -329,19 +319,19 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
         )}
 
         <View style={styles.content}>
-          <Text style={styles.eventTitle}>{parche.eventData?.name}</Text>
-          <Text style={styles.eventPlace}>
-            {parche.eventData?.place} - {parche.eventData?.city}
-          </Text>
-          
+          <Image source={{ uri: parche.img }} style={styles.eventImage} />
+
+          <Text style={styles.sectionLabel}>Fecha de Creación</Text>
+          <Text style={styles.eventPlace}>{formatDate(parche.dateCreated)}</Text>
+
           <Text style={styles.sectionLabel}>Descripción</Text>
           <Text style={styles.description}>
-            {parche.eventData?.description ? parche.eventData?.description : parche.name}
+            {parche?.description}
           </Text>
 
           <View style={styles.separator} />
 
-          <Text style={styles.sectionLabel}>Creador</Text>
+          <Text style={styles.sectionLabel}>Creado por</Text>
           <TouchableOpacity
             style={styles.creatorRow}
             onPress={() =>
@@ -405,30 +395,32 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
                 )}
             </View>
           ))}
-{dataUser.id === parche.user_created.id && parche.pendingMembers.length > 0 && (
-  <View style={{marginTop: 20}}>
-    <Text style={{color: '#fff', fontSize: 16, fontWeight: 'bold'}}>Invitaciones Enviadas</Text>
-    <Text style={{color: '#aaa', fontSize: 12, marginBottom: 10}}>
-      (Usuarios que aún no han aceptado)
-    </Text>
 
-    {parche.pendingMembers.map(member => (
-      <View key={member.id} style={styles.memberItem}>
-        <TouchableOpacity
-          style={{flexDirection: 'row', alignItems: 'center', flex: 1}}
-          onPress={() => navigation.navigate('FriendTimeline', {id: member.id})}
-        >
-          <MaterialIcons name="access-time" size={20} color="#aaa" style={{marginRight: 8}} />
-          <Image source={{uri: member.img}} style={styles.avatar} />
-          <Text style={styles.memberName}>
-            {member.first_name} {member.last_name}
-          </Text>
-        </TouchableOpacity>
-        <Text style={{color: '#888', fontSize: 12, marginLeft: 8}}>(Pendiente)</Text>
-      </View>
-    ))}
-  </View>
-)}
+          {dataUser.id === parche.user_created.id && parche.pendingMembers.length > 0 && (
+            <View style={{marginTop: 20}}>
+              <Text style={{color: '#fff', fontSize: 16, fontWeight: 'bold'}}>Invitaciones Enviadas</Text>
+              <Text style={{color: '#aaa', fontSize: 12, marginBottom: 10}}>
+                (Usuarios que aún no han aceptado)
+              </Text>
+          
+              {parche.pendingMembers.map(member => (
+                <View key={member.id} style={styles.memberItem}>
+                  <TouchableOpacity
+                    style={{flexDirection: 'row', alignItems: 'center', flex: 1}}
+                    onPress={() => navigation.navigate('FriendTimeline', {id: member.id})}
+                  >
+                    <MaterialIcons name="access-time" size={20} color="#aaa" style={{marginRight: 8}} />
+                    <Image source={{uri: member.img}} style={styles.avatar} />
+                    <Text style={styles.memberName}>
+                      {member.first_name} {member.last_name}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={{color: '#888', fontSize: 12, marginLeft: 8}}>(Pendiente)</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {dataUser.id === parche.user_created.id && (
             <TouchableOpacity
               style={styles.addMemberButton}
@@ -475,7 +467,11 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
       </View>
       <Modal visible={showAddMembers} animationType="slide">
         <View style={styles.modalContainer}>
-          <Header title="Agregar Miembros" />
+          <Header title="Agregar Miembros" onBack={() => {
+            setShowAddMembers(false);
+            setSelected([]);
+            setSearchUser('');
+          }} />
 
           <View style={styles.searchContainer}>
             <MaterialIcons
@@ -539,7 +535,7 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
             />
           )}
 
-         {selected.length > 0 && (
+       {selected.length > 0 && (
   <TouchableOpacity style={styles.button} onPress={() => setShowConfirmModal(true)}>
     <Text style={styles.buttonText}>Invitar ({selected.length})</Text>
   </TouchableOpacity>
@@ -551,7 +547,7 @@ const [imageDimensions, setImageDimensions] = useState({ width: ITEM_WIDTH, heig
               setShowAddMembers(false);
               setSelected([]);
               setSearchUser('');
-               fetchParche(); 
+                fetchParche(); 
             }}>
             <Text style={styles.buttonText}>Cerrar</Text>
           </TouchableOpacity>
@@ -696,6 +692,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginHorizontal: 10,
     marginTop: 10,
+    resizeMode: 'contain',
+    backgroundColor: '#222',
+    alignSelf: 'center',
   },
   kickIcon: {
     position: 'absolute',
@@ -816,6 +815,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#000',
   },
+  modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.6)',
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingHorizontal: 20,
+},
+
+
   elegantModal: {
   backgroundColor: '#1a1a1a',
   padding: 25,
@@ -856,14 +864,7 @@ elegantButtonText: {
   color: '#fff',
   fontWeight: '600',
 },
-modalOverlay: {
-  flex: 1,
-  backgroundColor: 'rgba(0,0,0,0.6)',
-  justifyContent: 'center',
-  alignItems: 'center',
-  paddingHorizontal: 20,
-},
 
 });
 
-export default DetailsParches;
+export default DetailsGroups;

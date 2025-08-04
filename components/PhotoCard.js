@@ -1,96 +1,109 @@
-import { View, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
-import React, { useState, useEffect } from 'react';
-import AntDesign from "react-native-vector-icons/AntDesign";
-import { useNavigation } from '@react-navigation/native';
-import { createThumbnail } from 'react-native-create-thumbnail';
+import {
+  View,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  Text,
+  Dimensions,
+} from 'react-native';
+import React, {useState} from 'react';
+import AntDesign from 'react-native-vector-icons/AntDesign';
+import {useNavigation} from '@react-navigation/native';
 
-const isVideo = (url) => {
+const isVideo = url => {
   const videoExtensions = ['.mp4', '.mov', '.avi', '.webm'];
   return videoExtensions.some(ext => url?.toLowerCase().endsWith(ext));
 };
 
-const PhotoCard = ({ image, id, idUser }) => {
+const PhotoCard = ({image, id, idUser, views, video, isReel}) => {
   const navigation = useNavigation();
-  const isMediaVideo = isVideo(image?.uri || image);
+
+  const uri = image?.uri || image;
+  const isMediaVideo = isVideo(uri);
+  let thumbnailUri = null;
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [thumbnailUri, setThumbnailUri] = useState(null);
 
-  useEffect(() => {
-    const generateThumbnail = async () => {
-      if (isMediaVideo) {
-        try {
-          setLoading(true);
-          const result = await createThumbnail({
-            url: image?.uri || image,
-          });
-          setThumbnailUri(result.path);
-          setLoading(false);
-        } catch (err) {
-          console.error("Error creando thumbnail:", err);
-          setError(true);
-          setLoading(false);
-        }
-      } else {
-        setLoading(false); // Para imágenes normales
-      }
-    };
+  const dynamicSize =
+    Dimensions.get('window').width /
+      (Dimensions.get('window').width >= 768 ? 4 : 3) -
+    12;
 
-    generateThumbnail();
-  }, [image]);
+  const showPlaceholder = !image || error || (isMediaVideo && !thumbnailUri);
 
-  const showPlaceholder = !image || error;
+  console.log(showPlaceholder)
 
-  return (
-    <TouchableOpacity onPress={() => navigation.navigate("Post", { id, idUser })}>
-      <View style={styles.container}>
-        <View style={styles.imageWrapper}>
-          {showPlaceholder ? (
-            <View style={[styles.image, styles.placeholder]}>
-              <AntDesign name="picture" size={32} color="#888" />
-            </View>
-          ) : (
-            <>
-              <Image
-                source={
-                  isMediaVideo
-                    ? { uri: thumbnailUri }
-                    : (typeof image === 'string' ? { uri: image } : image)
-                }
-                style={styles.image}
-                resizeMode="cover"
-                onLoadStart={() => setLoading(true)}
-                onLoadEnd={() => setLoading(false)}
-                onError={() => {
-                  setError(true);
-                  setLoading(false);
-                }}
-              />
-              {loading && (
-                <View style={styles.loader}>
-                  <ActivityIndicator size="small" color="#fff" />
-                </View>
-              )}
-              {isMediaVideo && !loading && !error && (
-                <View style={styles.playIcon}>
-                  <AntDesign name="playcircleo" size={30} color="#fff" />
-                </View>
-              )}
-            </>
-          )}
-        </View>
+return (
+  <TouchableOpacity
+    onPress={() =>
+      navigation.navigate(isReel ? 'Reels' : 'Post', isReel ? { id } : { id, idUser })
+    }>
+    <View style={{ ...styles.container, width: dynamicSize, height: dynamicSize }}>
+      <View style={styles.imageWrapper}>
+        {showPlaceholder ? (
+          <View style={[styles.image, styles.placeholder]}>
+            <AntDesign name="picture" size={32} color="#888" />
+          </View>
+        ) : (
+          <>
+            <Image
+              source={
+                isMediaVideo
+                  ? { uri: thumbnailUri || uri }
+                  : typeof image === 'string'
+                  ? { uri: image }
+                  : image
+              }
+              style={styles.image}
+              resizeMode="cover"
+              onLoadStart={() => setLoading(true)}
+              onLoadEnd={() => setLoading(false)}
+              onError={() => {
+                setError(true);
+                setLoading(false);
+              }}
+            />
+            {loading && (
+              <View style={styles.loader}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            )}
+            {video && (
+              <View style={styles.playIcon}>
+                <AntDesign name="playcircleo" size={30} color="#fff" />
+              </View>
+            )}
+            {views != null && (
+              <View style={styles.viewsContainer}>
+                <AntDesign
+                  name="eye"
+                  size={14}
+                  color="#fff"
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={styles.viewsText}>
+                  {typeof views === 'string' || typeof views === 'number'
+                    ? views
+                    : '0'}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
       </View>
-    </TouchableOpacity>
-  );
+    </View>
+  </TouchableOpacity>
+);
+
 };
 
 const styles = StyleSheet.create({
   container: {
-    width: 120,
-    height: 120,
     padding: 0,
     margin: 1,
-    backgroundColor: 'transparent', // Sin fondo
+    backgroundColor: 'transparent',
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -98,7 +111,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent', // Sin fondo
+    backgroundColor: 'transparent',
   },
   image: {
     width: '100%',
@@ -109,7 +122,7 @@ const styles = StyleSheet.create({
   placeholder: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'transparent', // Sin fondo
+    backgroundColor: 'transparent',
   },
   loader: {
     ...StyleSheet.absoluteFillObject,
@@ -120,12 +133,30 @@ const styles = StyleSheet.create({
   },
   playIcon: {
     position: 'absolute',
-    top: '40%',
-    left: '40%',
+    top: '50%',
+    left: '50%',
     backgroundColor: 'rgba(0,0,0,0.3)',
+    transform: [{translateX: -15}, {translateY: -15}],
     borderRadius: 20,
     padding: 4,
     zIndex: 3,
+  },
+  viewsContainer: {
+    position: 'absolute',
+    bottom: 4,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    zIndex: 5,
+  },
+  viewsText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

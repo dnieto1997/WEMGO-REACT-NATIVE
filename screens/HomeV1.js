@@ -16,7 +16,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useFocusEffect} from '@react-navigation/native';
-import {getHttps, postHttps, deleteHttps} from '../api/axios';
+import {getHttps, postHttps} from '../api/axios';
 import {SocketContext} from '../context/SocketContext';
 import HeaderHome from '../components/HeaderHome';
 import StoriesList from '../components/StoriesList';
@@ -27,7 +27,7 @@ import {COLORS} from '../constants';
 import EventCard from '../components/EventCard';
 import UserGreetingCard from '../components/UserGreetingCard';
 import Adds from '../components/Adds';
-import ImageViewerModal from '../components/ModalImage';
+import {useIsFocused} from '@react-navigation/native';
 
 const HomeV1 = ({navigation, route}) => {
   const [feeds, setFeeds] = useState([]);
@@ -57,7 +57,7 @@ const HomeV1 = ({navigation, route}) => {
   const {socket, sendReactionNotification, sendToggleNotification} =
     useContext(SocketContext);
   const [unreadCountNotifications, setUnreadCountNotifications] = useState(0);
-
+  const isFocused = useIsFocused();
   useEffect(() => {
     if (route?.params?.refresh) {
       fetchFeeds();
@@ -80,7 +80,6 @@ const HomeV1 = ({navigation, route}) => {
           `feed?page=${newPage}&limit=5`,
         );
 
-  
         const feedsArray = Array.isArray(feedsData) ? feedsData : [];
 
         let combined = [...feedsArray];
@@ -126,7 +125,6 @@ const HomeV1 = ({navigation, route}) => {
   const fetchAds = useCallback(async () => {
     try {
       const {data: adsData} = await getHttps(`event/publicidad`);
-      
 
       if (Array.isArray(adsData) && adsData.length > 0) {
         const ad = {...adsData[0], isAd: true};
@@ -139,36 +137,34 @@ const HomeV1 = ({navigation, route}) => {
     }
   }, []);
 
-const fetchStories = useCallback(async () => {
-  if (!DataUser.id) return;
-  try {
-    const response = await getHttps(`stories/findHome/${DataUser.id}`);
-    const storiesData = Array.isArray(response.data) ? response.data : [];
+  const fetchStories = useCallback(async () => {
+    if (!DataUser.id) return;
+    try {
+      const response = await getHttps(`stories/findHome/${DataUser.id}`);
+      const storiesData = Array.isArray(response.data) ? response.data : [];
 
-    // 🔁 Ordenar: los no vistos primero (viewAllStories: false), luego los vistos
-    const sortedStories = storiesData.sort((a, b) => {
-      if (a.viewAllStories === b.viewAllStories) return 0;
-      return a.viewAllStories ? 1 : -1;
-    });
+      // 🔁 Ordenar: los no vistos primero (viewAllStories: false), luego los vistos
+      const sortedStories = storiesData.sort((a, b) => {
+        if (a.viewAllStories === b.viewAllStories) return 0;
+        return a.viewAllStories ? 1 : -1;
+      });
 
-    // 👉 Mapear con estructura deseada
-    const formattedStories = sortedStories.map(userItem => ({
-      user: userItem.user,
-      viewAllStories: userItem.viewAllStories,
-      stories: userItem.stories.map(story => ({
-        ...story,
-        storyUrl: userItem.user?.img,
-        isLoading: false,
-      })),
-    }));
+      // 👉 Mapear con estructura deseada
+      const formattedStories = sortedStories.map(userItem => ({
+        user: userItem.user,
+        viewAllStories: userItem.viewAllStories,
+        stories: userItem.stories.map(story => ({
+          ...story,
+          storyUrl: userItem.user?.img,
+          isLoading: false,
+        })),
+      }));
 
-    setStories(formattedStories);
-  } catch (error) {
-    console.error('Error fetching stories:', error);
-  }
-}, [DataUser.id]);
-
-
+      setStories(formattedStories);
+    } catch (error) {
+      console.error('Error fetching stories:', error);
+    }
+  }, [DataUser.id]);
 
   const handleFollow = async id => {
     try {
@@ -213,6 +209,22 @@ const fetchStories = useCallback(async () => {
     } finally {
       setLikeLoading(prev => ({...prev, [idFeed]: false}));
     }
+  };
+
+  const updateFeedCommentsCount = (feedId, change = 1) => {
+    setFeeds(prevFeeds =>
+      prevFeeds.map(feed =>
+        feed.feed_id === feedId
+          ? {
+              ...feed,
+              commentCount: Math.max(
+                0,
+                parseInt(feed.commentCount || 0) + change,
+              ),
+            }
+          : feed,
+      ),
+    );
   };
 
   const fetchUnreadConversations = async () => {
@@ -298,18 +310,6 @@ const fetchStories = useCallback(async () => {
       setHasMoreFeeds(false);
     }
   };
-  const handleDelete = async () => {
-    if (!feedToDelete) return;
-    try {
-      await deleteHttps(`feed/${feedToDelete}`);
-      setFeeds(feeds.filter(f => f.feed_id !== feedToDelete));
-      setShowDeleteConfirm(false);
-      setFeedToDelete(null);
-      setShowOptionsId(null);
-    } catch (error) {
-      console.error('Error deleting feed:', error);
-    }
-  };
 
   const toggleOptions = feedId => {
     setShowOptionsId(prev => (prev === feedId ? null : feedId));
@@ -388,7 +388,7 @@ const fetchStories = useCallback(async () => {
               showFullDescription={showFullDescription}
               setShowFullDescription={setShowFullDescription}
               visibleFeedId={visibleFeedId}
-              isScreenFocused={true}
+              isScreenFocused={isFocused}
               isModalVisible={isImageViewVisible}
             />
           )
@@ -451,8 +451,8 @@ const fetchStories = useCallback(async () => {
         isVisible={isModalVisible}
         feedOwnerId={userFeedId}
         onClose={() => setModalVisible(false)}
-        onCommentAdded={fetchFeeds}
-        onCommentDeleted={fetchFeeds}
+        onCommentAdded={() => updateFeedCommentsCount(currentFeedId, 1)}
+        onCommentDeleted={() => updateFeedCommentsCount(currentFeedId, -1)}
       />
 
       <Likes
@@ -462,7 +462,7 @@ const fetchStories = useCallback(async () => {
         onClose={() => setModalVisible2(false)}
       />
 
-{/*     <ImageViewerModal
+      {/*     <ImageViewerModal
         visible={isImageViewVisible}
         images={currentImages}
         index={imageIndex}

@@ -39,6 +39,14 @@ const HeaderHome = ({ title, navigation, unreadCount = 0,unreadCountNotification
             </View>
           )}
         </TouchableOpacity>
+
+             <TouchableOpacity
+          onPress={() => navigation.navigate('TodoList')}
+          style={[styles.iconButton, { marginLeft: 10 }]}
+        >
+          <MaterialCommunityIcons name="account-search" color={'white'} size={30} />
+
+        </TouchableOpacity>
       </View>
     </View>
   );

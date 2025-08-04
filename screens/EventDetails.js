@@ -16,14 +16,13 @@ import {
   Share
 } from 'react-native';
 import React, {useEffect, useState} from 'react';
-import {COLORS, SIZES, FONTS, icons} from '../constants';
+import {COLORS, SIZES} from '../constants';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Header from '../components/Header';
 import Button from '../components/Button';
 import {getHttps, postHttps} from '../api/axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import RNFS from 'react-native-fs';
 import CommentEvents from '../components/CommentEvents';
 import RNBlobUtil from 'react-native-blob-util';
 import FastImage from 'react-native-fast-image';

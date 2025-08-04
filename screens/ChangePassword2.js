@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
 import React, { useCallback, useEffect, useReducer, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SIZES, icons } from '../constants';
+import { COLORS, SIZES } from '../constants';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { validateInput } from '../utils/actions/formActions';

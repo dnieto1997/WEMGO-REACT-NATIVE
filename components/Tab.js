@@ -15,8 +15,8 @@ const Tab = () => {
       
         { name: "Event", route: "Event", icon: "home", iconType: "MaterialCommunityIcons" },
           { name: "Explore", route: "Explore", icon: "calendar-outline", iconType: "MaterialCommunityIcons" },
-        { name: "Create", route: "CreateEventV2", icon: "plus", iconType: "Entypo", isCenter: true },
-        { name: "Todo", route: "Todo", icon: "account-plus", iconType: "MaterialCommunityIcons" },
+        { name: "Create", route: "ShareTypeScreen", icon: "plus", iconType: "Entypo", isCenter: true },
+        { name: "Reels", route: "Reels", icon: "motion-play", iconType: "MaterialCommunityIcons" },
         { name: "Profile", route: "Profile", icon: "account-edit", iconType: "MaterialCommunityIcons" },
     ];
 

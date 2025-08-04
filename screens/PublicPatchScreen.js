@@ -117,7 +117,7 @@ const PublicPatchScreen = ({route}) => {
           {loading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>Crear Sala</Text>
+            <Text style={styles.buttonText}>Crear Parche</Text>
           )}
         </TouchableOpacity>
       </View>

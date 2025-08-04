@@ -1,19 +1,20 @@
 // FriendTimeline.js final ensamblado y optimizado
-import React, { useContext, useEffect, useState } from 'react';
-import { View, Share } from 'react-native';
+import React, {useContext, useEffect, useState} from 'react';
+import {View, Share, TouchableOpacity, Text} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getHttps } from '../api/axios';
-import { SocketContext } from '../context/SocketContext';
+import {getHttps} from '../api/axios';
+import {SocketContext} from '../context/SocketContext';
 import Tab from '../components/Tab';
 import HeaderProfile from '../components/HeaderProfile';
 import FeedGallery from '../components/FeedGallery';
 import ProfileModal from '../components/ProfileModal';
 import DescriptionModal from '../components/DescriptionModal';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-const FriendTimeline = ({ navigation, route }) => {
-  const { id } = route.params;
-  const { socket, sendToggleNotification } = useContext(SocketContext);
+const FriendTimeline = ({navigation, route}) => {
+  const {id} = route.params;
+  const {socket, sendToggleNotification} = useContext(SocketContext);
   const [user, setUser] = useState({});
   const [feed, setFeed] = useState([]);
   const [DataUser, setDataUser] = useState({});
@@ -23,6 +24,8 @@ const FriendTimeline = ({ navigation, route }) => {
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [refreshHeader, setRefreshHeader] = useState(0);
+  const [activeTab, setActiveTab] = useState('posts');
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!socket) return;
@@ -50,7 +53,7 @@ const FriendTimeline = ({ navigation, route }) => {
 
   const handleShareProfile = async () => {
     try {
-      const { data } = await getHttps(`shortlink/generate?type=profile&id=${id}`);
+      const {data} = await getHttps(`shortlink/generate?type=profile&id=${id}`);
       await Share.share({
         message: `Mira este perfil en Wemgo:\n${data.url}`,
       });
@@ -65,7 +68,7 @@ const FriendTimeline = ({ navigation, route }) => {
       setIsFollowing(isNowFollowing);
       setFollowers(prev => (isNowFollowing ? prev + 1 : prev - 1));
       if (isNowFollowing) {
-        sendToggleNotification?.({ followerId: DataUser.id, followedId: id });
+        sendToggleNotification?.({followerId: DataUser.id, followedId: id});
       }
     } catch (error) {
       console.error('Error toggle follow:', error);
@@ -78,10 +81,12 @@ const FriendTimeline = ({ navigation, route }) => {
         const [userRes, followRes, feedRes, statusRes] = await Promise.all([
           getHttps(`users/${id}`),
           getHttps(`followers/${id}`),
+
           getHttps(`feed/search/${id}`),
+
           getHttps(`followers/status/${id}`),
         ]);
-        console.log(feedRes.data.length);
+
         setUser(userRes.data);
         setFollowers(followRes.data.followers);
         setFollowing(followRes.data.following);
@@ -97,10 +102,49 @@ const FriendTimeline = ({ navigation, route }) => {
     loadAllData();
   }, [id]);
 
-  const insets = useSafeAreaInsets();
+  const renderMediaTabs = () => (
+    <View
+      style={{
+        flexDirection: 'row',
+        backgroundColor: '#1e1e1e',
+        borderRadius: 20,
+        marginVertical: 12,
+        alignSelf: 'center',
+      }}>
+      {['posts', 'reels'].map(type => (
+        <TouchableOpacity
+          key={type}
+          onPress={() => setActiveTab(type)}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 6,
+            paddingHorizontal: 20,
+            borderRadius: 20,
+            backgroundColor: activeTab === type ? '#944AF5' : 'transparent',
+            marginHorizontal: 5,
+          }}>
+          <MaterialIcons
+            name={type === 'posts' ? 'photo-library' : 'video-library'}
+            size={18}
+            color={activeTab === type ? '#fff' : '#888'}
+            style={{marginRight: 6}}
+          />
+          <Text
+            style={{
+              color: activeTab === type ? '#fff' : '#888',
+              fontFamily: 'Poppins-Bold',
+              fontSize: 14,
+            }}>
+            {type === 'posts' ? 'Publicaciones' : 'Reels'}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#200f39', paddingTop: insets.top }}>
+    <View style={{flex: 1, backgroundColor: '#200f39', paddingTop: insets.top}}>
       <HeaderProfile
         user={user}
         isFollowing={isFollowing}
@@ -114,8 +158,8 @@ const FriendTimeline = ({ navigation, route }) => {
         onRefresh={refreshHeader}
         onShare={handleShareProfile}
       />
-
-      <FeedGallery feed={feed} userId={id} />
+      {renderMediaTabs()}
+      <FeedGallery feed={feed} userId={id} activeTab={activeTab} />
 
       <Tab />
 

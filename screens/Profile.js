@@ -6,23 +6,26 @@ import {
   FlatList,
   Alert,
   Modal,
+  ActivityIndicator,
+  RefreshControl,
+  Dimensions,
+  Share,
 } from 'react-native';
 import FastImage from 'react-native-fast-image';
-import React, { useEffect, useState, useCallback } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, FONTS, SIZES, images } from '../constants';
+import React, {useEffect, useState, useCallback} from 'react';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {COLORS, SIZES, images} from '../constants';
 import AntDesign from 'react-native-vector-icons/AntDesign';
-import { ScrollView } from 'react-native-virtualized-view';
+import {ScrollView} from 'react-native-virtualized-view';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getHttps } from '../api/axios';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons'; // Icono de "X" para limpiar
-import PhotoCard from '../components/PhotoCard';
+import {getHttps} from '../api/axios';
+import {useFocusEffect, useRoute} from '@react-navigation/native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import PhotoCardEliminate from '../components/PhotoCardEliminate';
 import Tab from '../components/Tab';
 
-const Profile = ({ navigation }) => {
+const Profile = ({navigation}) => {
   const route = useRoute();
   const [DataUser, setDataUser] = useState({});
   const [Followers, setFollowers] = useState('');
@@ -31,6 +34,29 @@ const Profile = ({ navigation }) => {
   const [feed, setUserFeeds] = useState([]);
   const [User, setUser] = useState({});
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingFeeds, setLoadingFeeds] = useState(true);
+  const screenWidth = Dimensions.get('window').width;
+  const numColumns = screenWidth >= 768 ? 4 : 3; // Más columnas en tablets
+  const [activeTab, setActiveTab] = useState('posts');
+  const horizontalPadding = 16; // margen lateral total
+  const spacing = 8; // espacio entre cada card
+
+  const totalSpacing = spacing * (numColumns - 1) + horizontalPadding * 2;
+  const cardSize = (screenWidth - totalSpacing) / numColumns;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.shouldRefresh) {
+        loadUserData();
+        UserEvent(DataUser.id);
+
+        // Limpia el flag para evitar recarga innecesaria
+        navigation.setParams({shouldRefresh: false});
+      }
+    }, [route.params?.shouldRefresh]),
+  );
 
   // Compara dos objetos shallow (solo para props simples)
   const shallowEqual = (obj1, obj2) => {
@@ -59,6 +85,9 @@ const Profile = ({ navigation }) => {
 
   const loadUserData = async () => {
     try {
+      setLoading(true);
+      setLoadingFeeds(true); // 🔁 activa skeletons en el FlatList
+
       const data = await AsyncStorage.getItem('userData');
       if (data) {
         const parsedData = JSON.parse(data);
@@ -70,57 +99,26 @@ const Profile = ({ navigation }) => {
 
         // Followers/Following
         const followRes = await getHttps(`followers/${parsedData.id}`);
-        if (Followers !== followRes.data.followers) setFollowers(followRes.data.followers);
-        if (Following !== followRes.data.following) setFollowing(followRes.data.following);
+        if (Followers !== followRes.data.followers)
+          setFollowers(followRes.data.followers);
+        if (Following !== followRes.data.following)
+          setFollowing(followRes.data.following);
 
         // Events
-        const eventRes = await getHttps(`event-user/countbyuser/${parsedData.id}`);
+        const eventRes = await getHttps(
+          `event-user/countbyuser/${parsedData.id}`,
+        );
         if (countEvent !== eventRes.data) setcountEvent(eventRes.data);
 
-        // Feeds
         const feedRes = await getHttps(`feed/search/${parsedData.id}`);
+
         if (!feedsAreEqual(feed, feedRes.data)) setUserFeeds(feedRes.data);
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
-    }
-  };
-
-  // Función para obtener seguidores y seguidos
-  const FindFollow = async userId => {
-    try {
-      const response = await getHttps(`followers/${userId}`);
-      setFollowers(response.data.followers);
-      setFollowing(response.data.following);
-    } catch (error) {
-      console.error('Error fetching followers:', error);
-    }
-  };
-
-  const loadUserFeeds = async userId => {
-    try {
-      const response = await getHttps(`feed/search/${userId}`);
-      setUserFeeds(response.data);
-    } catch (error) {
-      console.error('Error fetching user feeds:', error);
-    }
-  };
-
-  const eventGoing = async count => {
-    if (count == 0) {
-      Alert.alert('Aviso', 'No has seleccionado Eventos');
-    } else {
-      navigation.navigate('YourEvent');
-    }
-  };
-
-  const fetchUserData = async id => {
-    try {
-      const response = await getHttps(`users/${id}`);
-      console.log(response.data);
-      setUser(response.data);
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
+    } finally {
+      setLoading(false);
+      setTimeout(() => setLoadingFeeds(false), 500); // ⏳ pequeña espera para animación
     }
   };
 
@@ -130,18 +128,7 @@ const Profile = ({ navigation }) => {
     setcountEvent(response.data);
   };
 
-
   // Solo refresca si route.params?.shouldRefresh es true, si no, mantiene el estado
-  useFocusEffect(
-    useCallback(() => {
-      if (route.params?.shouldRefresh) {
-        loadUserData();
-        UserEvent(DataUser.id);
-        // Limpia el flag para evitar recarga innecesaria
-        navigation.setParams({ shouldRefresh: false });
-      }
-    }, [route.params?.shouldRefresh])
-  );
 
   // Carga inicial solo una vez
   useEffect(() => {
@@ -149,13 +136,35 @@ const Profile = ({ navigation }) => {
     UserEvent(DataUser.id);
   }, []);
 
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await loadUserData();
+    } catch (error) {
+      console.error('Error on refresh:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleShareProfile = async id => {
+    try {
+      const {data} = await getHttps(`shortlink/generate?type=profile&id=${id}`);
+      await Share.share({
+        message: `Mira este perfil en Wemgo:\n${data.url}`,
+      });
+    } catch (err) {
+      console.error('Error al compartir perfil:', err);
+    }
+  };
+
   // User Profile Info
   const renderUserProfileInfo = () => {
     return (
       <View style={styles.card}>
         {User.img ? (
           <FastImage
-            source={{ uri: User.img }}
+            source={{uri: User.img}}
             style={styles.avatar}
             resizeMode={FastImage.resizeMode.cover}
           />
@@ -175,7 +184,7 @@ const Profile = ({ navigation }) => {
               name="verified"
               size={18}
               color="#3897f0"
-              style={{ marginLeft: 6 }}
+              style={{marginLeft: 6}}
             />
           )}
         </View>
@@ -183,7 +192,7 @@ const Profile = ({ navigation }) => {
         <View style={styles.btnContainer}>
           <TouchableOpacity
             onPress={() => navigation.navigate('Message')}
-            style={[styles.btn, { flex: 1, marginRight: 8 }]}>
+            style={[styles.btn, {flex: 1, marginRight: 8}]}>
             <Text style={styles.btnText}>WemChat</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -198,6 +207,12 @@ const Profile = ({ navigation }) => {
             ]}>
             <Text style={styles.btnText}>Parches</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              handleShareProfile(User.id);
+            }}>
+            <Ionicons name="share-social-outline" size={24} color="#fff" />
+          </TouchableOpacity>
         </View>
         <View style={styles.separateLine} />
         <View style={styles.countersContainer}>
@@ -209,7 +224,7 @@ const Profile = ({ navigation }) => {
           <View style={styles.line} />
 
           <TouchableOpacity
-            onPress={() => navigation.navigate('Followers', { id: DataUser.id })}>
+            onPress={() => navigation.navigate('Followers', {id: DataUser.id})}>
             <View style={styles.countersView}>
               <Text style={styles.countersNum}>{Followers}</Text>
               <Text style={styles.countersText}>Seguidores</Text>
@@ -219,7 +234,7 @@ const Profile = ({ navigation }) => {
           <View style={styles.line} />
 
           <TouchableOpacity
-            onPress={() => navigation.navigate('Following', { id: DataUser.id })}>
+            onPress={() => navigation.navigate('Following', {id: DataUser.id})}>
             <View style={styles.countersView}>
               <Text style={styles.countersNum}>{Following}</Text>
               <Text style={styles.countersText}>Siguiendo</Text>
@@ -233,7 +248,6 @@ const Profile = ({ navigation }) => {
   // Render Profile Links
   const renderLinks = () => {
     const links = [
-
       {
         title: 'Editar Perfil',
         onPress: () => navigation.navigate('ProfileDetails'),
@@ -273,6 +287,8 @@ const Profile = ({ navigation }) => {
   };
 
   const renderUserFeeds = () => {
+    const [activeTab, setActiveTab] = useState('posts'); // 'posts' o 'videos'
+
     // Helper para detectar videos por extensión
     const isVideo = url => {
       if (!url || typeof url !== 'string') return false;
@@ -280,82 +296,149 @@ const Profile = ({ navigation }) => {
       return videoExtensions.some(ext => url.toLowerCase().endsWith(ext));
     };
 
+    const renderMediaTabs = () => (
+      <View
+        style={{
+          flexDirection: 'row',
+          backgroundColor: '#1e1e1e',
+          borderRadius: 20,
+          marginVertical: 12,
+          alignSelf: 'center',
+        }}>
+        {['posts', 'videos'].map(type => (
+          <TouchableOpacity
+            key={type}
+            onPress={() => setActiveTab(type)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 6,
+              paddingHorizontal: 20,
+              borderRadius: 20,
+              backgroundColor: activeTab === type ? '#944AF5' : 'transparent',
+              marginHorizontal: 5,
+            }}>
+            <MaterialIcons
+              name={type === 'posts' ? 'photo-library' : 'video-library'}
+              size={18}
+              color={activeTab === type ? '#fff' : '#888'}
+              style={{marginRight: 6}}
+            />
+            <Text
+              style={{
+                color: activeTab === type ? '#fff' : '#888',
+                fontFamily: 'Poppins-Bold',
+                fontSize: 14,
+              }}>
+              {type === 'posts' ? 'Publicaciones' : 'Reels'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+
+    const filteredFeed = feed.filter(item => {
+      const imgs = item.img ? JSON.parse(item.img) : [];
+      if (imgs.length === 0) return false;
+      const isVideoPost = item.isVideo === '1' || isVideo(imgs[0]);
+      return activeTab === 'posts' ? !isVideoPost : isVideoPost;
+    });
+
     return (
       <>
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 12,
-          }}></View>
+        {renderMediaTabs()}
 
         <FlatList
-          data={feed}
+          data={filteredFeed}
           numColumns={3}
-          keyExtractor={(item, index) => `${item.users_id.toString()}+${index}`}
+          keyExtractor={(item, index) => `${item.users_id}+${index}`}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             alignItems: 'center',
             justifyContent: 'center',
+            paddingHorizontal: horizontalPadding,
+            paddingTop: 10,
           }}
-         renderItem={({ item, index }) => {
-  let imageProps = null;
-  try {
-    const parsedThumbnails = JSON.parse(item.thumbnail);
-    const parsedImages = JSON.parse(item.feed_img);
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          renderItem={({item, index}) => {
+            let imageProps = null;
+            let isVideoPost = false;
 
-    if (Array.isArray(parsedImages) && parsedImages.length > 0) {
-      
-      const originalUrl = parsedImages[0];
-      console.log(originalUrl)
-      const isVideoPost = isVideo(originalUrl);
-      const thumbnailUrl = Array.isArray(parsedThumbnails) ? parsedThumbnails[0] : null;
+            try {
+              const parsedImages = item.img ? JSON.parse(item.img) : [];
+              const parsedThumbnails = item.thumbnail
+                ? JSON.parse(item.thumbnail)
+                : [];
 
-      imageProps = isVideoPost
-        ? { uri: originalUrl, thumbnail: thumbnailUrl }
-        : { uri: originalUrl };
-    }
-  } catch (error) {
-    console.log('Error parsing feed_img/thumbnail:', error);
-  }
+              if (Array.isArray(parsedImages) && parsedImages.length > 0) {
+                const originalUrl = parsedImages[0];
+                isVideoPost =
+                  item.isVideo === '1' ||
+                  originalUrl.toLowerCase().endsWith('.mp4');
 
-  return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      onPress={() => navigation.navigate('Post', {
-        id: item.feed_id,
-        index,
-        from: 'Profile',
-        userId: DataUser.id,
-      })}
-    >
-      <View style={{
+                const thumbnailUrl =
+                  parsedThumbnails.length > 0 ? parsedThumbnails[0] : null;
+
+                imageProps = isVideoPost
+                  ? {uri: originalUrl, thumbnail: thumbnailUrl}
+                  : {uri: originalUrl};
+              }
+            } catch (error) {
+              console.log('Error parsing img/thumbnail:', error);
+            }
+
+            return (
+        <View
+  style={{
+    aspectRatio: 1,
+    width: cardSize,
+    height: cardSize,
+    margin: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#222',
+    alignItems: 'center',
+    justifyContent: 'center',
+  }}>
+  {loadingFeeds ? (
+    <SkeletonCard />
+  ) : (
+    <PhotoCardEliminate
+      image={imageProps}
+      id={item.id}
+      idUser={DataUser.id}
+      reloadFeeds={loadUserData}
+      {...(isVideoPost ? {views: item.viewsCount} : {})}
+      size={cardSize}
+      isReel={item.isReel}
+    />
+  )}
+</View>
+
+            );
+          }}
+        />
+      </>
+    );
+  };
+
+  const SkeletonCard = () => (
+    <View
+      style={{
         aspectRatio: 1,
         width: SIZES.width / 3.5,
         height: SIZES.width / 3.5,
         margin: 4,
         borderRadius: 10,
         overflow: 'hidden',
-        backgroundColor: '#222',
-        alignItems: 'center',
+        backgroundColor: '#333',
         justifyContent: 'center',
+        alignItems: 'center',
       }}>
-      <PhotoCardEliminate
-  image={imageProps}
-  id={item.feed_id}
-  idUser={DataUser.id}
-  reloadFeeds={loadUserData} // ✅ esta línea es la que hace que se actualice
-/>
-      </View>
-    </TouchableOpacity>
+      <ActivityIndicator size="small" color="#888" />
+    </View>
   );
-}}
-
-        />
-      </>
-    );
-  };
 
   return (
     <SafeAreaView style={styles.area}>
@@ -370,18 +453,28 @@ const Profile = ({ navigation }) => {
           <Text style={styles.title}>Perfil</Text>
 
           <TouchableOpacity
-            onPress={() => setSettingsVisible(true)} // activa modal u opciones
+            onPress={() => setSettingsVisible(true)}
             style={styles.iconContainer}>
             <Ionicons name="settings-outline" size={22} color={COLORS.black} />
           </TouchableOpacity>
         </View>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {renderUserProfileInfo()}
-          {renderUserFeeds()}
 
-          <View style={{ margin: 50 }} />
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={['#944AF5']}
+              tintColor="#944AF5"
+            />
+          }>
+          {renderUserProfileInfo()}
+          {renderUserFeeds(activeTab, setActiveTab)}
+          <View style={{margin: 50}} />
         </ScrollView>
       </View>
+
       <Modal
         visible={settingsVisible}
         transparent
@@ -407,7 +500,7 @@ const Profile = ({ navigation }) => {
         </TouchableOpacity>
       </Modal>
 
-      <Tab/>
+      <Tab />
     </SafeAreaView>
   );
 };
@@ -589,7 +682,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },

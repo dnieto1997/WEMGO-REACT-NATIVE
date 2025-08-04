@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-//const BASE_URL = "http://192.168.1.7:3004/V1/";
-const BASE_URL = "https://wemgo.online/wemgotest/";
+//const BASE_URL = "http://192.168.1.10:3004/V1/";
+BASE_URL = "https://wemgo.online/wemgoandroid/";
 //const BASE_URL = "https://wemgo.online/wemgo/";
 
 
@@ -117,8 +117,14 @@ export const patchHttps = async (url, body) => {
       },
     });
   } catch (error) {
+  if (error.response) {
+   
+    throw error.response.data;
+  } else {
+    // Otros errores de red o configuración
     throw error;
   }
+}
 };
 
 
@@ -133,9 +139,14 @@ export const patchHttpsStories = async (url, body) => {
       },
     });
   } catch (error) {
-    console.log(error)
+  if (error.response) {
+   
+    throw error.response.data;
+  } else {
+    // Otros errores de red o configuración
     throw error;
   }
+}
 };
 
 export const deleteHttps = async (url) => {
@@ -161,10 +172,12 @@ export const getHttps = async (url, params) => {
       },
     });
   } catch (error) {
-    if (error.status) {
-
-      //aqui es donde recibe
-    }
+  if (error.response) {
+   
+    throw error.response.data;
+  } else {
+    // Otros errores de red o configuración
     throw error;
   }
+}
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
-import { SocketContext } from '../context/SocketContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -41,22 +41,17 @@ const CommentEvents = ({
   const [editMentionObj, setEditMentionObj] = useState(null); // Para edición
   const [DataUser, setDataUser] = useState({});
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-    const {sendCommentEventNotification} =
-      useContext(SocketContext); // Integrar sockets
-
   // Menciones para crear
-  const [mentionList, setMentionList] = useState([]);
-const [mentionStart, setMentionStart] = useState(-1);
-const [mentionQuery, setMentionQuery] = useState('');
-const [suggestions, setSuggestions] = useState([]);
-const [showSuggestions, setShowSuggestions] = useState(false);
-const [isSendingComment, setIsSendingComment] = useState(false);
-
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionStart, setMentionStart] = useState(-1);
   // Menciones para editar
   const [editShowSuggestions, setEditShowSuggestions] = useState(false);
   const [editSuggestions, setEditSuggestions] = useState([]);
   const [editMentionQuery, setEditMentionQuery] = useState('');
   const [editMentionStart, setEditMentionStart] = useState(-1);
+  const insets = useSafeAreaInsets();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -101,7 +96,6 @@ const [isSendingComment, setIsSendingComment] = useState(false);
   const fetchComments = async () => {
     try {
       const response = await getHttps(`comment-event/find/${eventId}`);
-  
       let commentsArray = [];
       if (Array.isArray(response.data)) {
         commentsArray = response.data;
@@ -115,82 +109,54 @@ const [isSendingComment, setIsSendingComment] = useState(false);
     }
   };
 
-  
-
-const fetchMentionUsers = async (query) => {
-  try {
-    if (!query) return [];
-    const res = await getHttps(`users/search/${query}`);
-    return res.data.map(u => ({
-      id: u.id,
-      name: `${u.first_name} ${u.last_name}`,
-    }));
-  } catch {
-    return [];
-  }
-};
-
-const extractMentions = async (text) => {
-  const mentionRegex = /@([\w\s]+)/g;
-  const mentions = [...text.matchAll(mentionRegex)].map(m => m[1].trim());
-
-  const res = await Promise.all(
-    mentions.map(async (name) => {
-      const searchRes = await getHttps(`users/search/${name}`);
-      const foundUser = searchRes.data.find(u =>
-        `${u.first_name} ${u.last_name}`.toLowerCase() === name.toLowerCase()
-      );
-      return foundUser ? { id: foundUser.id, name: `@${name}` } : null;
-    })
-  );
-
-  return res.filter(Boolean); // eliminar nulls
-};
+  const fetchMentionUsers = async (query) => {
+    try {
+      if (!query) return [];
+      const res = await getHttps(`users/search/${query}`);
+      return res.data.map(u => ({
+        id: u.id,
+        name: `${u.first_name} ${u.last_name}`,
+      }));
+    } catch {
+      return [];
+    }
+  };
 
   // Detectar @ y mostrar sugerencias (crear)
   const handleCommentChange = async (text) => {
-  setNewComment(text);
-  if (mentionObj && !text.includes(mentionObj.name)) setMentionObj(null);
+    setNewComment(text);
+    if (mentionObj && !text.includes(mentionObj.name)) setMentionObj(null);
 
-  const selection = text.lastIndexOf('@');
-  if (selection !== -1) {
-    const afterAt = text.slice(selection + 1);
-    if (/^[\w\s]{0,20}$/.test(afterAt)) {
-      setMentionQuery(afterAt);
-      setMentionStart(selection);
-      const users = await fetchMentionUsers(afterAt);
-      setSuggestions(users);
-      setShowSuggestions(true);
-      return;
+    const selection = text.lastIndexOf('@');
+    if (selection !== -1) {
+      const afterAt = text.slice(selection + 1);
+      if (/^[\w\s]{0,20}$/.test(afterAt)) {
+        setMentionQuery(afterAt);
+        setMentionStart(selection);
+        const users = await fetchMentionUsers(afterAt);
+        setSuggestions(users);
+        setShowSuggestions(true);
+        return;
+      }
     }
-  }
-  setShowSuggestions(false);
-  setMentionQuery('');
-  setMentionStart(-1);
-};
+    setShowSuggestions(false);
+    setMentionQuery('');
+    setMentionStart(-1);
+  };
 
   // Insertar mención seleccionada como objeto (crear)
-const handleSelectMention = (user) => {
-  if (mentionStart === -1) return;
-
-  const fullName = `${user.name}`;
-  const mentionText = `@${fullName}`;
-
-  const before = newComment.slice(0, mentionStart);
-  const after = newComment.slice(mentionStart + mentionQuery.length + 1);
-  const fullText = before + mentionText + after;
-  setNewComment(fullText);
-
-  setMentionList(prev => {
-    const alreadyMentioned = prev.some(m => m.id === user.id);
-    if (alreadyMentioned) return prev;
-    return [...prev, { id: user.id, name: mentionText }];
-  });
-
-  setShowSuggestions(false);
-  setMentionQuery('');
-  setMentionStart(-1);
-};
+  const handleSelectMention = (user) => {
+    if (mentionStart === -1) return;
+    const before = newComment.slice(0, mentionStart);
+    const after = newComment.slice(mentionStart + mentionQuery.length + 1);
+    const mentionText = `@${user.name}`;
+    const fullText = before + mentionText + after;
+    setNewComment(fullText);
+    setMentionObj({ id: user.id, name: mentionText });
+    setShowSuggestions(false);
+    setMentionQuery('');
+    setMentionStart(-1);
+  };
 
   // Detectar @ y mostrar sugerencias (editar)
   const handleEditCommentChange = async (text) => {
@@ -229,53 +195,33 @@ const handleSelectMention = (user) => {
   };
 
   // Aquí se arma el body y se envía la mención correctamente (crear)
-const addComment = async () => {
-  if (!newComment.trim()) return;
-  setIsSendingComment(true);
-
-  try {
-    const id_user_mention = mentionList.map(m => m.id);
-    const user_mention = mentionList.map(m => m.name);
-
-    const payload = {
-      id_event: eventId, // ✅ CAMBIADO AQUÍ
+  const addComment = async () => {
+    if (!newComment.trim()) return;
+    let id_user_mention = null;
+    let user_mention = null;
+    if (mentionObj && newComment.includes(mentionObj.name)) {
+      id_user_mention = mentionObj.id;
+      user_mention = mentionObj.name;
+    }
+    let body = {
+      id_event: eventId,
       comments: newComment,
-      id_user_mention: JSON.stringify(id_user_mention),
-      user_mention: JSON.stringify(user_mention),
+      id_user_mention,
+      user_mention,
     };
+    if (!id_user_mention) delete body.id_user_mention;
+    if (!user_mention) delete body.user_mention;
 
-  
-    const response = await postHttps('comment-event', payload);
-  
-
-    const newCommentData = {
-      commentId: response.data.id,
-      commentText: newComment,
-      userId: DataUser.id,
-      userFirstName: DataUser.firstName,
-      userLastName: DataUser.lastName,
-      userImg: DataUser.img,
-      eventId: eventId,
-      idUserMention: id_user_mention,
-      userMention: user_mention,
-    };
-
-    sendCommentEventNotification(newCommentData);
-
-    setComments(prev => [...prev, newCommentData]);
-    setNewComment('');
-    setMentionList([]); // reset
-    setShowSuggestions(false);
-    onCommentAdded && onCommentAdded();
-  } catch (error) {
-    console.error('Error adding comment:', error);
-  } finally {
-    setIsSendingComment(false);
-  }
-};
-
-
-
+    try {
+      await postHttps('comment-event', body);
+      setNewComment('');
+      setMentionObj(null);
+      fetchComments();
+      onCommentAdded && onCommentAdded();
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
 
   // Aquí se arma el body y se envía la mención correctamente (editar)
   const saveEditedComment = async commentId => {
@@ -323,76 +269,35 @@ const addComment = async () => {
     fetchComments();
   };
 
- const navigateToProfile = (userId) => {
-  if (DataUser?.id === userId) {
-    navigation.navigate('Profile');
-  } else {
-    navigation.navigate('FriendTimeline', { id: userId });
-  }
-};
+  // Navegación a perfil (usada en la mención)
+  const navigateToProfile = userId => {
+    onClose();
+    if (DataUser.id === userId) {
+      navigation.navigate('Profile');
+    } else {
+      navigation.navigate('FriendTimeline', { id: userId });
+    }
+  };
 
-
-const renderCommentText = (item) => {
-  const content = item.commentText;
-
-  let idMentionList = [];
-  let userMentionList = [];
-
-  try {
-    idMentionList = Array.isArray(item.idUserMention)
-      ? item.idUserMention
-      : JSON.parse(item.idUserMention || '[]');
-    userMentionList = Array.isArray(item.userMention)
-      ? item.userMention
-      : JSON.parse(item.userMention || '[]');
-  } catch {
-    return <Text style={styles.commentText}>{content}</Text>;
-  }
-
-  if (!userMentionList.length || !idMentionList.length) {
-    return <Text style={styles.commentText}>{content}</Text>;
-  }
-
-  // Partes del comentario con menciones resaltadas
-  const elements = [];
-  let remainingText = content;
-
-  userMentionList.forEach((mention, i) => {
-    const mentionIndex = remainingText.indexOf(mention);
-    if (mentionIndex !== -1) {
-      const beforeText = remainingText.substring(0, mentionIndex);
-      const afterText = remainingText.substring(mentionIndex + mention.length);
-
-      if (beforeText) {
-        elements.push(
-          <Text key={`before-${i}`} style={styles.commentText}>{beforeText}</Text>
-        );
-      }
-
-      elements.push(
-        <Text
-          key={`mention-${i}`}
-          style={styles.mentionLink}
-          onPress={() => navigateToProfile(idMentionList[i])}
-        >
-          {mention}
+  const renderCommentText = (item) => {
+    if (item.userMention && item.idUserMention) {
+      const before = item.commentText.split(item.userMention)[0];
+      const after = item.commentText.split(item.userMention)[1] || '';
+      return (
+        <Text style={styles.commentText}>
+          {before}
+          <Text
+            style={styles.mentionLink}
+            onPress={() => navigateToProfile(item.idUserMention)}
+          >
+            {item.userMention}
+          </Text>
+          {after}
         </Text>
       );
-
-      remainingText = afterText;
     }
-  });
-
-  if (remainingText) {
-    elements.push(
-      <Text key="after" style={styles.commentText}>{remainingText}</Text>
-    );
-  }
-
-  return <Text>{elements}</Text>;
-};
-
-
+    return <Text style={styles.commentText}>{item.commentText}</Text>;
+  };
 
   const renderComment = ({ item }) => (
     <View style={styles.commentContainer}>
@@ -402,7 +307,7 @@ const renderCommentText = (item) => {
             source={{
               uri:
                 item.userImg ||
-                'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
+                'https://static-00.iconduck.com/assets.00/profile-default-icon-2048x2045-u3j7s5nj.png',
             }}
             style={styles.commentImage}
           />
@@ -476,13 +381,18 @@ const renderCommentText = (item) => {
         <View style={styles.overlay} />
       </TouchableWithoutFeedback>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={{ flex: 1 , paddingTop: insets.top }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
           <View style={styles.modalContainer}>
-            <Text style={styles.title}>Comentarios</Text>
+            <View style={styles.headerRow}>
+              <Text style={styles.title}>Comentarios</Text>
+              <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                <MaterialIcons name="close" size={28} color="white" />
+              </TouchableOpacity>
+            </View>
             <FlatList
               data={comments}
               keyExtractor={(item, index) => `${index}`}
@@ -501,7 +411,7 @@ const renderCommentText = (item) => {
                 placeholder="Escribe un Comentario..."
                 placeholderTextColor="white"
               />
-              <TouchableOpacity style={styles.replySendButton} onPress={addComment}   disabled={isSendingComment}>
+              <TouchableOpacity style={styles.replySendButton} onPress={addComment}>
                 <MaterialIcons
                   name="send"
                   size={30}
@@ -530,7 +440,7 @@ const renderCommentText = (item) => {
       </KeyboardAvoidingView>
     </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   overlay: {
@@ -545,13 +455,23 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 16,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 16,
     fontFamily: "Poppins-Bold",
-    color: "white"
+    color: "white",
+    flex: 1,
+  },
+  closeButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   commentList: {
     flexGrow: 1,
@@ -579,11 +499,12 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Bold",
     fontWeight: "bold"
   },
-mentionLink: {
-  color: '#944af4',
-  fontWeight: 'bold',
-  fontFamily: "Poppins-Bold"
-},
+  mentionLink: {
+    color: 'white',
+    textDecorationLine: 'underline',
+    fontWeight: 'bold',
+    fontFamily: "Poppins-Bold",
+  },
   replyActions: {
     flexDirection: 'row',
     alignItems: 'center',

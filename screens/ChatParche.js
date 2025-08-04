@@ -14,6 +14,7 @@ import {
   Dimensions,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GiftedChat, Bubble} from 'react-native-gifted-chat';
@@ -266,52 +267,68 @@ const ChatParche = () => {
     );
   };
 
-  const handleSend = async () => {
-    if (inputMessage.trim() === '' && !selectedFile) return;
-    setIsSending(true);
+const handleSend = async (fileToSend = null) => {
+  const trimmedMessage = inputMessage.trim();
+  const hasText = trimmedMessage !== '';
+  const file = fileToSend || selectedFile;
 
-    let filePayload = {};
+  // ⛔ Bloquear si no hay texto ni archivo
+  if (!hasText && !file) return;
 
-    // Subir archivo si hay
-    if (selectedFile) {
-      const formData = new FormData();
-      formData.append('file', {
-        uri: selectedFile.uri,
-        type: selectedFile.type || 'application/octet-stream',
-        name: selectedFile.fileName || selectedFile.name || 'archivo',
-      });
+  setIsSending(true);
+  let filePayload = {};
 
-      try {
+  try {
+    // ✅ Si hay archivo, verificar validez y subir
+    if (file) {
+      const isValidFile = file.uri && (file.fileName || file.name);
+
+      if (!isValidFile) {
+        if (!hasText) {
+          Alert.alert('Archivo inválido', 'El archivo seleccionado no es válido.');
+          return;
+        }
+        // Solo texto → ignorar archivo inválido
+      } else {
+        const formData = new FormData();
+        formData.append('file', {
+          uri: file.uri,
+          type: file.type || 'application/octet-stream',
+          name: file.fileName || file.name || 'archivo',
+        });
+
         const response = await postHttpsStories('parche-chat/upload', formData);
+        if (!response?.data?.fileUrl) throw new Error('Archivo no subido');
 
         filePayload = {
           fileUrl: response.data.fileUrl,
           fileName: response.data.fileName,
           fileType: response.data.fileType,
         };
-      } catch (err) {
-        console.error('Error al subir archivo:', err);
-        Alert.alert('Error', 'No se pudo enviar el archivo.');
-        setIsSending(false);
-        return;
       }
     }
 
-    const messageContent = inputMessage.trim() || '[Archivo adjunto]';
-
+    // 🔁 Enviar mensaje por socket
     socket.emit('sendParcheMessage', {
       parcheId,
-      content: messageContent,
+      content: hasText ? trimmedMessage : '[Archivo adjunto]',
       senderId: DataUser.id,
       ...filePayload,
     });
 
+    // 🧼 Limpiar campos
     setInputMessage('');
-    setInputHeight(40);
     setSelectedFile(null);
-    setShowFileModal(false);
+  } catch (err) {
+    console.error('Error al enviar mensaje:', err);
+    Alert.alert('Error', err.message || 'No se pudo enviar el mensaje.');
+  } finally {
     setIsSending(false);
-  };
+  }
+};
+
+
+
 
   useEffect(() => {
     fetchMessages();
@@ -413,49 +430,6 @@ const ChatParche = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Modal nativo para confirmar envío */}
-            <Modal visible={showFileModal} transparent animationType="fade">
-              <View
-                style={{
-                  flex: 1,
-                  backgroundColor: 'rgba(0,0,0,0.5)',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}>
-                <View
-                  style={{
-                    backgroundColor: '#3d3d3d',
-                    padding: 20,
-                    borderRadius: 10,
-                    width: '80%',
-                  }}>
-                  <Text style={{color: 'white', marginBottom: 10}}>
-                    ¿Enviar este archivo?
-                  </Text>
-                  <Text style={{color: 'white'}}>
-                    Nombre: {selectedFile?.name || selectedFile?.fileName}
-                  </Text>
-                  <Text style={{color: 'white'}}>
-                    Tamaño: {Math.round((selectedFile?.size || 0) / 1024)} KB
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'flex-end',
-                      marginTop: 15,
-                    }}>
-                    <TouchableOpacity
-                      onPress={() => setShowFileModal(false)}
-                      style={{marginRight: 20}}>
-                      <Text style={{color: 'red'}}>Cancelar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleSend} disabled={isSending}>
-                      <Text style={{color: 'green'}}>Enviar</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Modal>
           </View>
         )}
         renderBubble={props => {
@@ -684,141 +658,92 @@ const ChatParche = () => {
             </Text>
 
             {/* Cámara (foto) */}
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginVertical: 8,
-              }}
-              onPress={async () => {
-                setShowAttachmentModal(false);
-                const granted = await requestCameraPermission();
-                if (!granted) return;
+           <TouchableOpacity
+  style={{
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  }}
+  onPress={async () => {
+    setShowAttachmentModal(false);
+    const granted = await requestCameraPermission();
+    if (!granted) return;
 
-                launchCamera({mediaType: 'photo'}, async response => {
-                  if (response.assets?.length) {
-                    const asset = response.assets[0];
+    launchCamera({ mediaType: 'photo' }, response => {
+      if (response.assets?.length) {
+         const asset = response.assets[0];
+    handleSend(asset); // ✅ enviar directamente
+      }
+    });
+  }}>
+  <MaterialIcons
+    name="photo-camera"
+    size={24}
+    color="white"
+    style={{ marginRight: 10 }}
+  />
+  <Text style={{ color: 'white', fontSize: 16 }}>Cámara (foto)</Text>
+</TouchableOpacity>
 
-                    try {
-                      const stats = await RNFS.stat(asset.uri);
-                      const sizeBytes = stats.size;
-
-                      const formatFileSize = bytes => {
-                        if (!bytes || isNaN(bytes)) return '0 KB';
-
-                        const kb = bytes / 1024;
-                        if (kb < 1024) {
-                          return `${kb.toFixed(1)} KB`;
-                        }
-
-                        const mb = kb / 1024;
-                        return `${mb.toFixed(2)} MB`;
-                      };
-
-                      const fileWithSize = {
-                        ...asset,
-                        size: sizeBytes,
-                        formattedSize: formatFileSize(sizeBytes),
-                      };
-
-                      setSelectedFile(fileWithSize);
-                      setShowFileModal(true);
-                    } catch (err) {
-                      console.warn(
-                        'No se pudo obtener el tamaño de la imagen:',
-                        err,
-                      );
-                    }
-                  }
-                });
-              }}>
-              <MaterialIcons
-                name="photo-camera"
-                size={24}
-                color="white"
-                style={{marginRight: 10}}
-              />
-              <Text style={{color: 'white', fontSize: 16}}>Cámara (foto)</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginVertical: 8,
-              }}
-              onPress={async () => {
-                setShowAttachmentModal(false);
-                const granted = await requestCameraPermission();
-                if (!granted) return;
+  style={{
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  }}
+  onPress={async () => {
+    setShowAttachmentModal(false);
+    const granted = await requestCameraPermission();
+    if (!granted) return;
 
-                launchCamera(
-                  {mediaType: 'video', videoQuality: 'high'},
-                  async response => {
-                    if (response.assets?.length) {
-                      const asset = response.assets[0];
+    launchCamera(
+      { mediaType: 'video', videoQuality: 'high' },
+      response => {
+        if (response.assets?.length) {
+         const asset = response.assets[0];
+    handleSend(asset); // ✅ enviar directamente
+        }
+      }
+    );
+  }}
+>
+  <MaterialIcons
+    name="videocam"
+    size={24}
+    color="white"
+    style={{ marginRight: 10 }}
+  />
+  <Text style={{ color: 'white', fontSize: 16 }}>Grabar video</Text>
+</TouchableOpacity>
 
-                      try {
-                        const stats = await RNFS.stat(asset.uri);
-                        const sizeBytes = stats.size;
-
-                        const formatFileSize = bytes => {
-                          const kb = bytes / 1024;
-                          if (kb < 1024) return `${kb.toFixed(1)} KB`;
-                          return `${(kb / 1024).toFixed(2)} MB`;
-                        };
-
-                        const fileWithSize = {
-                          ...asset,
-                          size: sizeBytes,
-                          formattedSize: formatFileSize(sizeBytes),
-                        };
-
-                        setSelectedFile(fileWithSize);
-                        setShowFileModal(true);
-                      } catch (err) {
-                        console.warn(
-                          'No se pudo obtener el tamaño del video:',
-                          err,
-                        );
-                      }
-                    }
-                  },
-                );
-              }}>
-              <MaterialIcons
-                name="videocam"
-                size={24}
-                color="white"
-                style={{marginRight: 10}}
-              />
-              <Text style={{color: 'white', fontSize: 16}}>Grabar video</Text>
-            </TouchableOpacity>
 
             {/* Galería */}
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginVertical: 8,
-              }}
-              onPress={() => {
-                setShowAttachmentModal(false);
-                launchImageLibrary({mediaType: 'photo'}, response => {
-                  if (response.assets?.length) {
-                    setSelectedFile(response.assets[0]);
-                    setShowFileModal(true);
-                  }
-                });
-              }}>
-              <MaterialIcons
-                name="photo-library"
-                size={24}
-                color="white"
-                style={{marginRight: 10}}
-              />
-              <Text style={{color: 'white', fontSize: 16}}>Galería</Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+  style={{
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  }}
+  onPress={() => {
+    setShowAttachmentModal(false);
+    launchImageLibrary({ mediaType: 'photo' }, response => {
+      if (response.assets?.length) {
+       const asset = response.assets[0];
+    handleSend(asset); // ✅ enviar directamente
+      }
+    });
+  }}
+>
+  <MaterialIcons
+    name="photo-library"
+    size={24}
+    color="white"
+    style={{ marginRight: 10 }}
+  />
+  <Text style={{ color: 'white', fontSize: 16 }}>Galería</Text>
+</TouchableOpacity>
+
 
             {/* Archivos */}
           
@@ -832,6 +757,27 @@ const ChatParche = () => {
           </View>
         </View>
       </Modal>
+
+      {isSending && (
+  <Modal visible transparent animationType="fade">
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+      <Image
+        source={require('../assets/icons/logo.png')}
+        style={{ width: 100, height: 100, resizeMode: 'contain' }}
+      />
+      <ActivityIndicator size="large" color="#fff" style={{ marginTop: 20 }} />
+      <Text style={{ color: 'white', marginTop: 15, fontSize: 16 }}>
+        Enviando archivo...
+      </Text>
+    </View>
+  </Modal>
+)}
     </SafeAreaView>
   );
 };

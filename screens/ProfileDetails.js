@@ -127,7 +127,7 @@ const isDarkMode = colorScheme === 'dark';
         });
       }
 
-      console.log(JSON.stringify(formData))
+     
   
       const response = await patchHttpsStories(`users/${User.id}`, formData,true);
       console.log(response.data)

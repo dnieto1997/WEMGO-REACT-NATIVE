@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Image,
@@ -13,9 +13,13 @@ import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/Ionicons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const VideoPost = ({ videoUrl, thumbnails, isVisible, style, shouldPause }) => {
+const {width: SCREEN_WIDTH, height: SCREEN_HEIGHT} = Dimensions.get('window');
+const MIN_HEIGHT = 250;
+const MAX_HEIGHT = SCREEN_HEIGHT * 0.6; // ✅ altura máxima del video para que no se salga de la pantalla
+
+const VideoPost = ({videoUrl, thumbnails, isVisible, style, shouldPause}) => {
+
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(shouldPause);
   const [videoError, setVideoError] = useState(false);
@@ -23,8 +27,12 @@ const VideoPost = ({ videoUrl, thumbnails, isVisible, style, shouldPause }) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isReadyToPlay, setIsReadyToPlay] = useState(false);
-  const [videoSize, setVideoSize] = useState({ width: 9, height: 16 }); // default ratio
+  const [videoSize, setVideoSize] = useState({width: 9, height: 16});
   const [showPauseIcon, setShowPauseIcon] = useState(false);
+
+  useEffect(() => {
+    setPaused(!isVisible || shouldPause);
+  }, [isVisible, shouldPause]);
 
   useEffect(() => {
     setPaused(shouldPause);
@@ -32,13 +40,13 @@ const VideoPost = ({ videoUrl, thumbnails, isVisible, style, shouldPause }) => {
 
   const handleVideoLoad = data => {
     setDuration(data.duration);
-    const { width, height } = data.naturalSize || {};
+    const {width, height} = data.naturalSize || {};
     if (width && height) {
-      setVideoSize({ width, height });
+      setVideoSize({width, height});
     }
   };
 
-  const handleProgress = ({ currentTime }) => {
+  const handleProgress = ({currentTime}) => {
     setCurrentTime(currentTime);
   };
 
@@ -67,24 +75,26 @@ const VideoPost = ({ videoUrl, thumbnails, isVisible, style, shouldPause }) => {
   }
 
   const ratio = videoSize.width / videoSize.height;
-  const videoHeight = SCREEN_WIDTH / ratio;
+  const rawHeight = ratio > 0 ? SCREEN_WIDTH / ratio : SCREEN_WIDTH * (16 / 9);
+  const videoHeight = Math.min(Math.max(rawHeight, MIN_HEIGHT), MAX_HEIGHT); // ✅ tamaño controlado
+
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <View style={[styles.container, { height: videoHeight }]}>
+    <View style={[styles.container, style, {height: videoHeight}]}>
       {videoError ? (
         <View style={[styles.container, styles.centered]}>
           <Icon name="alert-circle" size={40} color="red" />
           <Text style={styles.errorText}>No se pudo cargar el video</Text>
           <TouchableOpacity onPress={handleRetry} style={styles.retryButton}>
-            <Text style={{ color: '#fff' }}>Reintentar</Text>
+            <Text style={{color: '#fff'}}>Reintentar</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.videoWrapper}>
           {!isReadyToPlay && thumbnails && (
             <Image
-              source={{ uri: thumbnails }}
+              source={{uri: thumbnails}}
               style={StyleSheet.absoluteFill}
               resizeMode="cover"
             />
@@ -98,18 +108,25 @@ const VideoPost = ({ videoUrl, thumbnails, isVisible, style, shouldPause }) => {
             onPressOut={() => {
               setPaused(false);
               setShowPauseIcon(false);
-            }}
-          >
+            }}>
             <View style={StyleSheet.absoluteFill}>
               <Video
                 key={videoUrl + retry}
-                source={{ uri: videoUrl }}
+                source={{
+                  uri: videoUrl,
+                  bufferConfig: {
+                    minBufferMs: 1000,
+                    maxBufferMs: 5000,
+                    bufferForPlaybackMs: 500,
+                    bufferForPlaybackAfterRebufferMs: 1000,
+                  },
+                }}
                 style={StyleSheet.absoluteFill}
                 resizeMode="cover"
                 repeat
                 muted={muted}
                 paused={paused}
-                maxBitRate={500000}
+                maxBitRate={250000}
                 onLoad={handleVideoLoad}
                 onProgress={handleProgress}
                 onError={handleVideoError}
@@ -130,11 +147,10 @@ const VideoPost = ({ videoUrl, thumbnails, isVisible, style, shouldPause }) => {
             </View>
           )}
 
-          {/* ✅ Mute */}
+          {/* ✅ Mute encima del video */}
           <TouchableOpacity
             style={styles.muteButton}
-            onPress={() => setMuted(m => !m)}
-          >
+            onPress={() => setMuted(m => !m)}>
             <Icon
               name={muted ? 'volume-mute' : 'volume-high'}
               size={20}
@@ -142,7 +158,7 @@ const VideoPost = ({ videoUrl, thumbnails, isVisible, style, shouldPause }) => {
             />
           </TouchableOpacity>
 
-          {/* ✅ Progreso */}
+          {/* ✅ Barra de progreso */}
           <View style={styles.progressBar}>
             <View
               style={{
@@ -173,6 +189,7 @@ const styles = StyleSheet.create({
   videoWrapper: {
     flex: 1,
     backgroundColor: '#000',
+    position: 'relative',
   },
   centered: {
     justifyContent: 'center',
@@ -220,7 +237,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 12, // ⬆️ subimos la barra un poco
     left: 0,
     height: 2,
     width: '100%',
@@ -231,7 +248,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{ translateX: -35 }, { translateY: -35 }],
+    transform: [{translateX: -35}, {translateY: -35}],
     zIndex: 10,
   },
 });

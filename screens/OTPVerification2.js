@@ -66,6 +66,19 @@ const OTPVerification2 = ({ navigation, route }) => {
     }
   };
 
+    const sendEmailOTP = async () => {
+      try {
+        const response = await postHttps('mail/send-mail', {
+          to: email, 
+        });
+         
+      } catch (error) {
+        console.error(error);
+        Alert.alert('Error', error.message || 'Failed to send OTP. Please try again.');
+      }
+    };
+    
+
   const renderResendCodeModal = () => {
     return (
       <Modal animationType="slide" transparent={true} visible={modalVisible}>
@@ -125,7 +138,11 @@ const OTPVerification2 = ({ navigation, route }) => {
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
             <Text style={styles.title}>No recibí el código</Text>
-            <TouchableOpacity onPress={() => setModalVisible(true)} style={{left:10,top:3}}>
+            <TouchableOpacity   onPress={() => {
+    setModalVisible(true);     // Mostrar modal inmediatamente
+    sendEmailOTP();            // Enviar correo en segundo plano (sin esperar)
+    setTimer(120);             // Reiniciar temporizador si es necesario
+  }} style={{left:10,top:3}}>
               <Text style={styles.boldTitle}> Reenviar código </Text>
             </TouchableOpacity>
           </View>

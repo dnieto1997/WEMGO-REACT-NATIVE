@@ -67,8 +67,17 @@ import Parches from './Parches';
 import DetailsParches from './DetailsParches';
 import ChatParche from './ChatParche';
 import AddPublicParche from './AddPublicParche';
+import ShareTypeScreen from './ShareTypeScreen';
+import Reels from './Reels';
+import CreateReel from './CreateReel';
+
+
+
+
 
 export {
+  CreateReel,
+  Reels,
   ViewStories,
   ChangePassword,
   CreateEvent,
@@ -88,7 +97,7 @@ export {
   MessageV2,
   Onboarding,
   OTPVerification,
-
+  ShareTypeScreen,
   PaymentSuccessful,
   PhoneNumber,
   Profile,

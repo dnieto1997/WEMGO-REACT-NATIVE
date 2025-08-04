@@ -1,7 +1,6 @@
 import React, { createContext, useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { postHttps } from '../api/axios';
 
 export const SocketContext = createContext();
 
@@ -14,14 +13,14 @@ const SocketProvider = ({ children }) => {
 
   const connectSocket = async () => {
     const BASE_URL = 'https://wemgo.online';
-    //const BASE_URL = 'http://192.168.1.12:3002';
+    //const BASE_URL = 'http://192.168.1.10:3004';
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token || socketRef.current) return;
 
       const newSocket = io(BASE_URL, {
         auth: { token: `Bearer ${token}` },
-        path: '/wemgo-sockettest/socket.io',
+        path: '/wemgo-socketandroid/socket.io', 
         transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: 10,

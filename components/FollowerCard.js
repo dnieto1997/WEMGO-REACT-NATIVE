@@ -1,10 +1,11 @@
 import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native'
 import React, { useState } from 'react'
 import { COLORS, SIZES } from '../constants'
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const DEFAULT_AVATAR = 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png'
 
-const FollowerCard = ({ onPress, avatar, name }) => {
+const FollowerCard = ({ onPress, avatar, name,checked}) => {
   const [imgError, setImgError] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -37,6 +38,10 @@ const FollowerCard = ({ onPress, avatar, name }) => {
         <View style={{ marginLeft: 12 }}>
           <Text style={styles.name}>{name}</Text>
         </View>
+          {checked == '1' && (
+              <MaterialIcons name="verified" size={18} color="#3897f0" style={{ marginLeft: 6 }} />
+            )}
+        
       </View>
     </TouchableOpacity>
   )

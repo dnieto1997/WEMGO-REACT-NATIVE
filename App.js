@@ -37,7 +37,6 @@ useEffect(() => {
   requestUserPermission();
   setupNotificationHandlers();
 
-  // 👇 Lógica para escuchar los deep links
   Linking.getInitialURL().then(processUrl);
   const linkingListener = Linking.addEventListener('url', ({ url }) => {
     processUrl(url);
@@ -54,7 +53,7 @@ const processUrl = async (url, retry = 0) => {
     if (!url) return;
 
     console.log('🔗 URL recibida:', url);
-    const match = url.match(/wemgo:\/\/(profile|event|chat|feed)\/(\d+)/);
+    const match = url.match(/wemgo:\/\/(profile|event|chat|feed|reel)\/(\d+)/);
     if (!match) return;
 
     const [, type, id] = match;

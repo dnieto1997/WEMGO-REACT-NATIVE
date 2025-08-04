@@ -8,7 +8,9 @@ import {
   HomeV2,
   Profile,
   ProfileV2,
+  Reels,
   SearchEvent,
+  ShareTypeScreen,
   TodoList,
 } from '../screens';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -96,10 +98,11 @@ const BottomTabNavigation = () => {
         }}
       />
       <Tab.Screen
-        name="CreateEventV2"
-        component={CreateEventV2}
+        name="ShareTypeScreen"
+        component={ShareTypeScreen}
         options={{
           unmountOnBlur: true,
+           tabBarStyle: { display: 'none' },
           tabBarIcon: () => {
             return (
               <View
@@ -122,10 +125,11 @@ const BottomTabNavigation = () => {
         }}
       />
       <Tab.Screen
-        name="Todo"
-        component={TodoList}
+        name="Reels"
+        component={Reels}
         options={{
           unmountOnBlur: false,
+           tabBarStyle: { display: 'none' },
           tabBarIcon: ({focused}) => {
             return (
               <View
@@ -134,7 +138,7 @@ const BottomTabNavigation = () => {
                   justifyContent: 'center',
                 }}>
                 <MaterialCommunityIcons
-                  name="account-plus"
+                  name="motion-play"
                   color={focused ? '#944af5' : COLORS.black}
                   size={30}
                 />

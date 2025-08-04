@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
+  Dimensions 
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -26,6 +27,7 @@ const HeaderProfile = ({
   onRefresh,
   onShare
 }) => {
+  const screenWidth = Dimensions.get('window').width ;
   return (
     <View style={styles.profileContainer}>
       <View style={{ top: 10 }}>
@@ -43,28 +45,32 @@ const HeaderProfile = ({
               <MaterialIcons name="verified" size={18} color="#3897f0" style={{ marginLeft: 6 }} />
             )}
           </View>
-          <View style={styles.followRow}>
-            <TouchableOpacity>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={styles.numItem}>{countFeed ? countFeed : 0}</Text>
-                <Text style={styles.nameItem}>MomentGo</Text>
-              </View>
-            </TouchableOpacity>
-            <View style={styles.line} />
-            <TouchableOpacity onPress={() => navigation.navigate('Followers', { id: userId })}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={styles.numItem}>{Followers ? Followers : 0}</Text>
-                <Text style={styles.nameItem}>Seguidores</Text>
-              </View>
-            </TouchableOpacity>
-            <View style={styles.line} />
-            <TouchableOpacity onPress={() => navigation.navigate('Following', { id: userId })}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={styles.numItem}>{Following ? Following : 0}</Text>
-                <Text style={styles.nameItem}>Siguiendo</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
+        <View style={{...styles.followRow,width:screenWidth-140}}>
+  <TouchableOpacity style={styles.statItem}>
+    <View style={{ alignItems: 'center' }}>
+      <Text style={styles.numItem}>{countFeed ?? 0}</Text>
+      <Text style={styles.nameItem}>MomentGo</Text>
+    </View>
+  </TouchableOpacity>
+
+  <View style={styles.line} />
+
+  <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('Followers', { id: userId })}>
+    <View style={{ alignItems: 'center' }}>
+      <Text style={styles.numItem}>{Followers ?? 0}</Text>
+      <Text style={styles.nameItem}>Seguidores</Text>
+    </View>
+  </TouchableOpacity>
+
+  <View style={styles.line} />
+
+  <TouchableOpacity style={styles.statItem} onPress={() => navigation.navigate('Following', { id: userId })}>
+    <View style={{ alignItems: 'center' }}>
+      <Text style={styles.numItem}>{Following ?? 0}</Text>
+      <Text style={styles.nameItem}>Siguiendo</Text>
+    </View>
+  </TouchableOpacity>
+</View>
         </View>
       </View>
       <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
@@ -150,9 +156,11 @@ const styles = StyleSheet.create({
   },
   followRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: 216,
-    marginTop: 8,
+  justifyContent: 'space-around',
+  alignItems: 'center',
+ 
+  paddingHorizontal: 10,
+  marginTop: 8,
   },
   buttonContainerFull: {
     flexDirection: 'row',

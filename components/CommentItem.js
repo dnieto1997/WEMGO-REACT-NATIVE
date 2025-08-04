@@ -10,7 +10,8 @@ import {
   TouchableWithoutFeedback,
   Image,
   Keyboard,
-  KeyboardAvoidingView
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { COLORS } from '../constants';
 import { deleteHttps, getHttps, patchHttps, postHttps } from '../api/axios';
@@ -27,13 +28,14 @@ const CommentItem = ({
   onCommentAdded,
   onCommentDeleted,
   feedOwnerId,
-  focusCommentId
+  focusCommentId,
+  isReel
 }) => {
   const navigation = useNavigation();
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState(null);
-  const [expandedReplies, setExpandedReplies] = useState({}); // { [commentId]: true/false }
+  const [expandedReplies, setExpandedReplies] = useState({});
   const [newReply, setNewReply] = useState('');
   const [selectedComment, setSelectedComment] = useState(null);
   const [replyModalVisible, setReplyModalVisible] = useState(false);
@@ -67,6 +69,7 @@ const CommentItem = ({
     });
     const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
       setKeyboardHeight(0);
+      setReplyingTo(null); // Oculta el input de responder al cerrar el teclado
     });
     return () => {
       keyboardDidShowListener.remove();
@@ -127,15 +130,21 @@ const CommentItem = ({
 
   const saveEditedReply = async replyId => {
     try {
-      await patchHttps(`w-reply/${replyId}`, { reply: editReplyText });
+    const resp=  await patchHttps(`w-reply/${replyId}`, { reply: editReplyText });
+
       setEditingReply(null);
       fetchComments();
-      setSelectedComment(prev => ({
-        ...prev,
-        replies: prev.replies.map(r =>
-          r.replyId == replyId ? { ...r, replyText: editReplyText } : r,
-        ),
-      }));
+       
+    setSelectedComment(prev => {
+  if (!prev || !Array.isArray(prev.replies)) return prev;
+  
+  return {
+    ...prev,
+    replies: prev.replies.map(r =>
+      r.replyId == replyId ? { ...r, replyText: editReplyText } : r,
+    ),
+  };
+});
     } catch (error) {
       console.error('Error editing reply:', error);
     }
@@ -162,15 +171,20 @@ const CommentItem = ({
     }
   };
 
-  const fetchComments = async () => {
-    try {
-      const response = await getHttps(`comments/find/${feedId}`);
-      console.log('Comentarios obtenidos:', response.data[0].replies);
-      setComments(response.data);
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-    }
-  };
+ const fetchComments = async () => {
+  try {
+  
+    const url = isReel
+      ? `comments/findreel/${feedId}`
+      : `comments/find/${feedId}`;
+             
+    const response = await getHttps(url);
+    
+    setComments(response.data);
+  } catch (error) {
+    console.error('Error fetching comments:', error);
+  }
+};
 
   const extractMentions = async (text) => {
     const mentionRegex = /@([\w\s]+)/g;
@@ -198,7 +212,7 @@ const CommentItem = ({
       const user_mention = mentionList.map(m => m.name);
 
       const payload = {
-        id_feed: feedId,
+          ...(isReel ? { id_reel: feedId } : { id_feed: feedId }),
         comments: newComment,
         id_user_mention: JSON.stringify(id_user_mention),
         user_mention: JSON.stringify(user_mention),
@@ -270,7 +284,7 @@ const CommentItem = ({
 
     try {
       const response = await postHttps('w-reply', {
-        id_feed: feedId,
+         ...(isReel ? { id_reel: feedId } : { id_feed: feedId }),
         id_comments: parentId,
         reply: newReply,
       });
@@ -349,7 +363,6 @@ const CommentItem = ({
 
     if (commentToUpdate) {
       let isLiked = commentToUpdate.userHasLiked;
-      console.log('primer', isLiked);
       // Optimistic UI: actualiza estado local de inmediato
       commentToUpdate.liked = !commentToUpdate.liked;
       commentToUpdate.reactionCount = isLiked ? Number(commentToUpdate.reactionCount) - 1 : Number(commentToUpdate.reactionCount) + 1;
@@ -427,7 +440,7 @@ const CommentItem = ({
             ...prev,
             [comment.commentId]: !isExpanded
           }))}
-          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 ,marginBottom: 10 }}>
+          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, marginBottom: 10 }}>
           <Text style={styles.viewMoreText}>
             {isExpanded ? 'Ocultar respuestas' : `Respuestas (${comment.replies.length})`}
           </Text>
@@ -626,26 +639,45 @@ const CommentItem = ({
       <View style={{ margin: 8 }} />
 
       {replyingTo === item.commentId && (
-        <View style={styles.replyInputContainer}>
-          <TextInput
-            style={styles.replyInput}
-            placeholder="Escribe una Replica ..."
-            placeholderTextColor={'white'}
-            value={newReply}
-            onChangeText={setNewReply}
-          />
-          <TouchableOpacity
-            style={styles.replySendButton}
-            onPress={() => addReply(item.commentId)}
-          >
-            <MaterialIcons name="send" size={30} color="white" />
-          </TouchableOpacity>
-        </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 230 : 0}
+          style={{ justifyContent: 'flex-end' }}
+        >
+          <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setReplyingTo(null); }}>
+            <View style={styles.replyInputContainer}>
+              <TextInput
+                style={styles.replyInput}
+                placeholder="Escribe una Replica ..."
+                placeholderTextColor={'white'}
+                value={newReply}
+                onChangeText={setNewReply}
+              />
+              <TouchableOpacity
+                style={styles.replySendButton}
+                onPress={() => { addReply(item.commentId); setReplyingTo(null); }}
+              >
+                <MaterialIcons name="send" size={30} color="white" />
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       )}
 
       {renderReplies(item)}
     </View>
   );
+
+  useEffect(() => {
+    if (replyingTo !== null && comments.length > 0 && flatListRef.current && keyboardHeight > 0) {
+      const index = comments.findIndex(c => c.commentId === replyingTo);
+      if (index !== -1) {
+        setTimeout(() => {
+          flatListRef.current.scrollToIndex({ index, animated: true, viewOffset: -20 });
+        }, 100);
+      }
+    }
+  }, [replyingTo, comments, keyboardHeight]);
 
   return (
     <Modal
@@ -667,23 +699,39 @@ const CommentItem = ({
             { length: 120, offset: 120 * index, index }
           )}
           contentContainerStyle={styles.commentList}
+          ListFooterComponent={
+            replyingTo !== null ? (
+              <View style={{ height: keyboardHeight + 80 }} />
+            ) : null
+          }
         />
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Escribe un Comentario..."
-            placeholderTextColor={'white'}
-            value={newComment}
-            onChangeText={handleCommentChange}
-          />
-          <TouchableOpacity
-            style={[styles.replySendButton, isSendingComment && { opacity: 0.5 }]}
-            onPress={addComment}
-            disabled={isSendingComment}
+        {/* Solo mostrar el input de comentario si NO se está respondiendo */}
+        {replyingTo === null && (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 230 : 0}
+            style={{ justifyContent: 'flex-end' }}
           >
-            <MaterialIcons name="send" size={30} color="white" />
-          </TouchableOpacity>
-        </View>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Escribe un Comentario..."
+                  placeholderTextColor={'white'}
+                  value={newComment}
+                  onChangeText={handleCommentChange}
+                />
+                <TouchableOpacity
+                  style={[styles.replySendButton, isSendingComment && { opacity: 0.5 }]}
+                  onPress={addComment}
+                  disabled={isSendingComment}
+                >
+                  <MaterialIcons name="send" size={30} color="white" />
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        )}
       </View>
 
       {showSuggestions && suggestions.length > 0 && (
@@ -760,12 +808,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.lightGray,
     borderRadius: 8,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray4 ,
+    borderBottomColor: COLORS.gray4,
   },
   replyInput: {
     flex: 1, // Para que ocupe todo el espacio disponible
     fontSize: 14,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
     color: 'white',
     fontWeight: 'bold',
     fontFamily: 'Poppins-Bold',
@@ -827,19 +876,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderColor: COLORS.gray,
-    paddingTop: 8,
+    paddingTop: 12,
+    paddingBottom: 18,
+    paddingHorizontal: 4,
+    backgroundColor: '#241a3a',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   input: {
     flex: 1,
     borderWidth: 1,
     borderColor: COLORS.gray,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
     marginRight: 8,
+    marginBottom: 12,
+    backgroundColor: '#2c2150',
     color: 'white',
     fontWeight: 'bold',
     fontFamily: 'Poppins-Bold',
+    fontSize: 16,
+    minHeight: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   addButton: {
     backgroundColor: 'gray',
@@ -919,8 +982,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   replySendButton: {
-    backgroundColor: '#944af4',
-    paddingVertical: 5,
+    backgroundColor: '#944af4',    paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 100,
     marginLeft: 10,

@@ -33,7 +33,8 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import FastImage from 'react-native-fast-image';
 import VideoPost from '../components/VideoPost';
-import VideoThumbnail from '../components/VideoThumbnail ';
+import VideoThumbnail from '../components/VideoThumbnail';
+
 
 const MessageDetails = ({navigation, route}) => {
   const {id} = route.params;
@@ -150,42 +151,46 @@ const MessageDetails = ({navigation, route}) => {
     return true;
   };
 
-  const downloadFile = async (fileUrl, fileName, messageId) => {
-    try {
-      setDownloadingId(messageId);
-      setDownloadProgress(0);
+const downloadFile = async (fileUrl, fileName, messageId) => {
+  try {
+    setDownloadingId(messageId);
+    setDownloadProgress(0);
 
-      const destPath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+    // ✅ Extraer el nombre y extensión directamente del fileUrl
+    const fileNameFromUrl = fileUrl.split('/').pop(); // ej: 9159f410-xxx.pdf
 
-      const download = RNFS.downloadFile({
-        fromUrl: fileUrl,
-        toFile: destPath,
-        progressDivider: 1,
-        progress: data => {
-          const percentage = data.bytesWritten / data.contentLength;
-          setDownloadProgress(percentage);
-        },
-      });
+    const destPath = `${RNFS.DownloadDirectoryPath}/${fileNameFromUrl}`;
+    console.log('📥 Descargando en:', destPath);
 
-      setCurrentDownloadJob(download); // ✅ guarda el job para cancelar si es necesario
+    const download = RNFS.downloadFile({
+      fromUrl: fileUrl,
+      toFile: destPath,
+      progressDivider: 1,
+      progress: data => {
+        const percentage = data.bytesWritten / data.contentLength;
+        setDownloadProgress(percentage);
+      },
+    });
 
-      await download.promise;
+    setCurrentDownloadJob(download);
+    await download.promise;
 
-      setDownloadProgress(1);
+    setDownloadProgress(1);
 
-      // ✅ mostrar verde completo por 0.5s
-      setTimeout(() => {
-        setDownloadingId(null);
-        setDownloadProgress(0);
-        setCurrentDownloadJob(null); // limpia job
-      }, 500);
-    } catch (error) {
-      console.error('Error al descargar archivo:', error);
+    setTimeout(() => {
       setDownloadingId(null);
       setDownloadProgress(0);
       setCurrentDownloadJob(null);
-    }
-  };
+    }, 500);
+  } catch (error) {
+    console.error('Error al descargar archivo:', error);
+    setDownloadingId(null);
+    setDownloadProgress(0);
+    setCurrentDownloadJob(null);
+  }
+};
+
+
 
   const cancelDownload = () => {
     if (currentDownloadJob) {
@@ -213,47 +218,8 @@ const MessageDetails = ({navigation, route}) => {
   };
   const openAttachmentMenu = () => setShowAttachmentModal(true);
 
-  const pickImageOrVideo = () => {
-    launchImageLibrary({mediaType: 'mixed'}, response => {
-      if (response.assets?.length) {
-        setSelectedFile(response.assets[0]);
-        setShowFileModal(true);
-      }
-    });
-  };
 
-  const pickDocument = async () => {
-    try {
-      const [res] = await pick({
-        mode: 'open',
-        type: '*/*',
-        requestLongTermAccess: false,
-      });
-
-      if (res && res.uri && res.name) {
-        const destPath = `${RNFS.DownloadDirectoryPath}/${res.name}`;
-
-        const fileContents = await RNFS.readFile(res.uri, 'base64');
-        await RNFS.writeFile(destPath, fileContents, 'base64');
-
-        setSelectedFile({
-          uri: res.uri,
-          type: res.type,
-          fileName: res.name,
-          size: res.size,
-        });
-        setShowFileModal(true);
-      }
-    } catch (err) {
-      if (err?.code === 'DOCUMENT_PICKER_CANCELED') {
-        console.log('Selección cancelada');
-      } else {
-        console.error('Error al seleccionar documento:', err);
-        Alert.alert('Error', 'No se pudo procesar el documento.');
-      }
-    }
-  };
-
+ 
   const fetchMessages = useCallback(async () => {
     if (!id) return;
     try {
@@ -311,55 +277,65 @@ const MessageDetails = ({navigation, route}) => {
 
 
 
-  const handleSend = async () => {
-      if (inputMessage.trim() === '' && !selectedFile) return;
+const handleSend = async (file = null) => {
+  const trimmedMessage = inputMessage.trim();
+  const fileToSend = file || selectedFile;
 
-    setIsSending(true);
+  // ❌ Nada que enviar
+  if (!trimmedMessage && !fileToSend) return;
 
-    let filePayload = {};
+  setIsSending(true);
 
-    // Subir archivo si hay
-    if (selectedFile) {
-      const formData = new FormData();
-      formData.append('file', {
-        uri: selectedFile.uri,
-        type: selectedFile.type || 'application/octet-stream',
-        name: selectedFile.fileName || selectedFile.name || 'archivo',
-      });
+  let filePayload = {};
 
-      try {
-        const response = await postHttpsStories('chat/upload', formData);
-        filePayload = {
-          fileUrl: response.data.fileUrl,
-          fileName: response.data.fileName,
-          fileType: response.data.fileType,
-        };
-      } catch (err) {
-        console.error('Error al subir archivo:', err);
-        Alert.alert('Error', 'No se pudo enviar el archivo.');
-        setIsSending(false);
-        return;
-      }
+  // ✅ Solo subimos archivo si NO hay texto o si se seleccionó archivo intencionalmente
+  if (fileToSend && fileToSend.uri) {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: fileToSend.uri,
+      type: fileToSend.type || 'application/octet-stream',
+      name: fileToSend.fileName || fileToSend.name || 'archivo',
+    });
+
+    try {
+      const response = await postHttpsStories('chat/upload', formData);
+      if (!response?.data?.fileUrl) throw new Error('Respuesta sin fileUrl');
+
+      filePayload = {
+        fileUrl: response.data.fileUrl,
+        fileName: response.data.fileName,
+        fileType: response.data.fileType,
+      };
+    } catch (err) {
+      console.log('Error al subir archivo:', err);
+      Alert.alert('Error', 'No se pudo enviar el archivo.');
+      setIsSending(false);
+      return;
     }
+  }
 
-    const messageContent = inputMessage.trim() || '[Archivo adjunto]';
-
+  try {
     socket.emit('sendMessage', {
       receiver: id,
-      content: messageContent,
+      content: trimmedMessage || '[Archivo adjunto]',
       ...filePayload,
     });
 
-    // ✅ Enviar al backend
-
-    // ✅ Limpiar campos
     setInputMessage('');
     setInputHeight(40);
     setSelectedFile(null);
-    setShowFileModal(false);
-setIsSending(false);
-
+  } catch (err) {
+    console.error('Error al enviar mensaje:', err);
+    Alert.alert('Error', 'No se pudo enviar el mensaje.');
+  } finally {
+    setIsSending(false);
   }
+};
+
+
+
+
+
 
 useEffect(() => {
   if (!socket || !DataUser?.id || !id) return;
@@ -461,51 +437,7 @@ useEffect(() => {
                 </TouchableOpacity>
               </View>
 
-              {/* Modal nativo para confirmar envío */}
-              <Modal visible={showFileModal} transparent animationType="fade">
-                <View
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}>
-                  <View
-                    style={{
-                      backgroundColor: '#3d3d3d',
-                      padding: 20,
-                      borderRadius: 10,
-                      width: '80%',
-                    }}>
-                    <Text style={{color: 'white', marginBottom: 10}}>
-                      ¿Enviar este archivo?
-                    </Text>
-                    <Text style={{color: 'white'}}>
-                      Nombre: {selectedFile?.name || selectedFile?.fileName}
-                    </Text>
-                    <Text style={{color: 'white'}}>
-                      Tamaño: {Math.round((selectedFile?.size || 0) / 1024)} KB
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'flex-end',
-                        marginTop: 15,
-                      }}>
-                      <TouchableOpacity
-                        onPress={() => setShowFileModal(false)}
-                        style={{marginRight: 20}}>
-                        <Text style={{color: 'red'}}>Cancelar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={handleSend}
-                        disabled={isSending}>
-                        <Text style={{color: 'green'}}>Enviar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </Modal>
+       
             </View>
           )}
           renderBubble={props => {
@@ -766,47 +698,42 @@ useEffect(() => {
                 marginVertical: 8,
               }}
               onPress={async () => {
-                setShowAttachmentModal(false);
-                const granted = await requestCameraPermission();
-                if (!granted) return;
+  setShowAttachmentModal(false);
+  const granted = await requestCameraPermission();
+  if (!granted) return;
 
-                launchCamera({mediaType: 'photo'}, async response => {
-                  if (response.assets?.length) {
-                    const asset = response.assets[0];
+  launchCamera({mediaType: 'photo'}, async response => {
+    if (response.assets?.length) {
+      const asset = response.assets[0];
+      try {
+        const stats = await RNFS.stat(asset.uri);
+        const sizeBytes = stats.size;
 
-                    try {
-                      const stats = await RNFS.stat(asset.uri);
-                      const sizeBytes = stats.size;
+        const formatFileSize = bytes => {
+          if (!bytes || isNaN(bytes)) return '0 KB';
+          const kb = bytes / 1024;
+          if (kb < 1024) return `${kb.toFixed(1)} KB`;
+          const mb = kb / 1024;
+          return `${mb.toFixed(2)} MB`;
+        };
 
-                      const formatFileSize = bytes => {
-                        if (!bytes || isNaN(bytes)) return '0 KB';
+        const fileWithSize = {
+          ...asset,
+          size: sizeBytes,
+          formattedSize: formatFileSize(sizeBytes),
+        };
 
-                        const kb = bytes / 1024;
-                        if (kb < 1024) {
-                          return `${kb.toFixed(1)} KB`;
-                        }
+        // ✅ Enviar directamente sin esperar estado
+        await handleSend(fileWithSize);
+      } catch (err) {
+        console.warn('No se pudo obtener el tamaño de la imagen:', err);
+      }
+    }
+  });
+}}
 
-                        const mb = kb / 1024;
-                        return `${mb.toFixed(2)} MB`;
-                      };
-
-                      const fileWithSize = {
-                        ...asset,
-                        size: sizeBytes,
-                        formattedSize: formatFileSize(sizeBytes),
-                      };
-
-                      setSelectedFile(fileWithSize);
-                      setShowFileModal(true);
-                    } catch (err) {
-                      console.warn(
-                        'No se pudo obtener el tamaño de la imagen:',
-                        err,
-                      );
-                    }
-                  }
-                });
-              }}>
+              
+              >
               <MaterialIcons
                 name="photo-camera"
                 size={24}
@@ -823,44 +750,43 @@ useEffect(() => {
                 marginVertical: 8,
               }}
               onPress={async () => {
-                setShowAttachmentModal(false);
-                const granted = await requestCameraPermission();
-                if (!granted) return;
+  setShowAttachmentModal(false);
+  const granted = await requestCameraPermission();
+  if (!granted) return;
 
-                launchCamera(
-                  {mediaType: 'video', videoQuality: 'high'},
-                  async response => {
-                    if (response.assets?.length) {
-                      const asset = response.assets[0];
+  launchCamera(
+    {mediaType: 'video', videoQuality: 'high'},
+    async response => {
+      if (response.assets?.length) {
+        const asset = response.assets[0];
 
-                      try {
-                        const stats = await RNFS.stat(asset.uri);
-                        const sizeBytes = stats.size;
+        try {
+          const stats = await RNFS.stat(asset.uri);
+          const sizeBytes = stats.size;
 
-                        const formatFileSize = bytes => {
-                          const kb = bytes / 1024;
-                          if (kb < 1024) return `${kb.toFixed(1)} KB`;
-                          return `${(kb / 1024).toFixed(2)} MB`;
-                        };
+          const formatFileSize = bytes => {
+            const kb = bytes / 1024;
+            if (kb < 1024) return `${kb.toFixed(1)} KB`;
+            return `${(kb / 1024).toFixed(2)} MB`;
+          };
 
-                        const fileWithSize = {
-                          ...asset,
-                          size: sizeBytes,
-                          formattedSize: formatFileSize(sizeBytes),
-                        };
+          const fileWithSize = {
+            ...asset,
+            size: sizeBytes,
+            formattedSize: formatFileSize(sizeBytes),
+          };
 
-                        setSelectedFile(fileWithSize);
-                        setShowFileModal(true);
-                      } catch (err) {
-                        console.warn(
-                          'No se pudo obtener el tamaño del video:',
-                          err,
-                        );
-                      }
-                    }
-                  },
-                );
-              }}>
+          // ✅ Ya no seteamos el estado primero
+          await handleSend(fileWithSize); // ← directamente se lo pasamos
+        } catch (err) {
+          console.warn('No se pudo obtener el tamaño del video:', err);
+        }
+      }
+    },
+  );
+}}
+
+              >
               <MaterialIcons
                 name="videocam"
                 size={24}
@@ -871,67 +797,68 @@ useEffect(() => {
             </TouchableOpacity>
 
             {/* Galería */}
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginVertical: 8,
-              }}
-              onPress={() => {
-                setShowAttachmentModal(false);
-                launchImageLibrary({mediaType: 'photo'}, response => {
-                  if (response.assets?.length) {
-                    setSelectedFile(response.assets[0]);
-                    setShowFileModal(true);
-                  }
-                });
-              }}>
-              <MaterialIcons
-                name="photo-library"
-                size={24}
-                color="white"
-                style={{marginRight: 10}}
-              />
-              <Text style={{color: 'white', fontSize: 16}}>Galería</Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+  style={{
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  }}
+  onPress={() => {
+    setShowAttachmentModal(false);
+    launchImageLibrary({mediaType: 'photo'}, async response => {
+      if (response.assets?.length) {
+        const asset = response.assets[0];
+
+        await handleSend(asset); // ✅ enviar directamente sin usar setSelectedFile
+      }
+    });
+  }}
+>
+  <MaterialIcons
+    name="photo-library"
+    size={24}
+    color="white"
+    style={{marginRight: 10}}
+  />
+  <Text style={{color: 'white', fontSize: 16}}>Galería</Text>
+</TouchableOpacity>
+
 
             {/* Archivos */}
-            <TouchableOpacity
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginVertical: 8,
-              }}
-              onPress={async () => {
-                setShowAttachmentModal(false);
-                try {
-                  const [res] = await pick({mode: 'open', type: '*/*'});
-                  if (res?.uri && res?.name) {
-                    const destPath = `${RNFS.DownloadDirectoryPath}/${res.name}`;
-                    const fileContents = await RNFS.readFile(res.uri, 'base64');
-                    await RNFS.writeFile(destPath, fileContents, 'base64');
-                    setSelectedFile({
-                      uri: res.uri,
-                      type: res.type,
-                      fileName: res.name,
-                      size: res.size,
-                    });
-                    setShowFileModal(true);
-                  }
-                } catch (err) {
-                  if (err?.code !== 'DOCUMENT_PICKER_CANCELED') {
-                    Alert.alert('Error', 'No se pudo abrir el archivo.');
-                  }
-                }
-              }}>
-              <MaterialIcons
-                name="insert-drive-file"
-                size={24}
-                color="white"
-                style={{marginRight: 10}}
-              />
-              <Text style={{color: 'white', fontSize: 16}}>Archivos</Text>
-            </TouchableOpacity>
+           <TouchableOpacity
+  style={{
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  }}
+  onPress={async () => {
+    setShowAttachmentModal(false);
+    try {
+      const [res] = await pick({mode: 'open', type: '*/*'});
+      if (res?.uri && res?.name) {
+        await handleSend({
+          uri: res.uri,
+          type: res.type,
+          fileName: res.name,
+          size: res.size,
+        });
+      }
+    } catch (err) {
+      if (err?.code !== 'DOCUMENT_PICKER_CANCELED') {
+        Alert.alert('Error', 'No se pudo abrir el archivo.');
+      }
+    }
+  }}
+>
+  <MaterialIcons
+    name="insert-drive-file"
+    size={24}
+    color="white"
+    style={{marginRight: 10}}
+  />
+  <Text style={{color: 'white', fontSize: 16}}>Archivos</Text>
+</TouchableOpacity>
+
 
             {/* Cancelar */}
             <TouchableOpacity
@@ -942,6 +869,28 @@ useEffect(() => {
           </View>
         </View>
       </Modal>
+
+
+      {isSending && (
+  <Modal visible transparent animationType="fade">
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+      <Image
+        source={require('../assets/icons/logo.png')} // usa tu logo aquí
+        style={{ width: 100, height: 100, resizeMode: 'contain' }}
+      />
+      <ActivityIndicator size="large" color="#fff" style={{ marginTop: 20 }} />
+      <Text style={{ color: 'white', marginTop: 15, fontSize: 16 }}>
+        Enviando archivo...
+      </Text>
+    </View>
+  </Modal>
+)}
     </SafeAreaView>
   );
 };

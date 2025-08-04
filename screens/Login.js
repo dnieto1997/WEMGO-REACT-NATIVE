@@ -7,6 +7,7 @@ import {
   Modal,
   Platform,
   ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
 import React, {useState} from 'react';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -25,12 +26,14 @@ const Login = ({navigation}) => {
   const [password, setPassword] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const consumirApi = async () => {
     if (email === '' || password === '') {
       setShowModal(true);
       return;
     }
+     setLoading(true);
     try {
       const response = await loginHttps({email, password});
    
@@ -54,6 +57,7 @@ const Login = ({navigation}) => {
         await AsyncStorage.setItem('authToken', response.data.token);
         await AsyncStorage.setItem('fcmToken', fcmToken);
          await postHttps('notification/save-token', { token: fcmToken });
+          setLoading(false);
 
         if (response.data.interest == 1) {
           navigation.navigate('Main');
@@ -67,7 +71,9 @@ const Login = ({navigation}) => {
       }
     } catch (err) {
       if (err.response && err.response.status === 403) {
+         setLoading(false);
         setShowModal(true);
+         
       }
     }
   };
@@ -171,6 +177,20 @@ const Login = ({navigation}) => {
             </View>
           </View>
         </Modal>
+
+<Modal transparent={true} visible={loading} animationType="fade">
+  <View style={styles.modalOverlay}>
+    <View style={styles.loadingCard}>
+      <Image
+        source={require('../assets/images/logo.png')}
+        style={styles.loadingLogo}
+      />
+      <ActivityIndicator size="large" color="#ffffff" style={{ marginTop: 25 }} />
+      <Text style={styles.loadingText}>Iniciando sesión...</Text>
+    </View>
+  </View>
+</Modal>
+
       </SafeAreaView>
     </ImageBackground>
   );
@@ -318,7 +338,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.white,
     fontWeight: 'bold',
-  },
+  },modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+
+loadingCard: {
+  backgroundColor: '#944af5',
+  paddingVertical: 40,
+  paddingHorizontal: 35,
+  borderRadius: 24,
+  alignItems: 'center',
+  width: 250,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.4,
+  shadowRadius: 8,
+  elevation: 10,
+},
+
+loadingLogo: {
+  width: 90,
+  height: 90,
+  resizeMode: 'contain',
+  borderRadius: 12,
+  marginBottom: 10,
+},
+
+loadingText: {
+  marginTop: 20,
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#fff',
+  fontFamily: 'Poppins-Bold',
+  textAlign: 'center',
+},
 });
 
 export default Login;

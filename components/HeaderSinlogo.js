@@ -139,6 +139,8 @@ const HeaderSinlogo = ({ onRefresh}) => {
               </View>
             )}
           </TouchableOpacity>
+          
+                 
         </View>
       </View>
     </View>

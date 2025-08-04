@@ -111,7 +111,7 @@ const Following = ({ navigation, route }) => {
                       : 'https://static.vecteezy.com/system/resources/previews/024/983/914/non_2x/simple-user-default-icon-free-png.png',
                   }}
                   name={`${item.first_name} ${item.last_name}`}
-                  numEventOrganized="0"
+                  checked={item.checked}
                 />
               )}
               showsVerticalScrollIndicator={true}

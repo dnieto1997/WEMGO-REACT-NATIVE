@@ -31,13 +31,7 @@ const MediaCarouselPost = ({
 
   const renderMedia = (item, index) => {
     const shouldPlay = isVisible && activeImageIndex === index && isScreenFocused && !isModalVisible;
-   console.log({
-  isVisible,
-  activeImageIndex,
-  index,
-  isScreenFocused,
-  isModalVisible,
-});
+
     const isVideoItem = isVideo(item);
     const thumbnailUri = thumbnails?.[index];
 

@@ -3,13 +3,12 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Image,
   Alert,
   Modal,
 } from 'react-native';
 import React, {useState} from 'react';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {COLORS, icons} from '../constants';
+import {COLORS} from '../constants';
 import Input from '../components/Input';
 import Header from '../components/Header';
 import {patchHttps} from '../api/axios';

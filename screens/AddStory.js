@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState, useRef as useReactRef } from 'react';
 import { PanResponder, TouchableOpacity } from 'react-native';
 import {
-  View, Text, StyleSheet, Alert, ActivityIndicator, Platform, Image, Dimensions
+  View, Text, StyleSheet, Alert, Platform, Image
 } from 'react-native';
 import { Camera, useCameraDevices } from 'react-native-vision-camera';
-import Video from 'react-native-video';
 import { launchImageLibrary } from 'react-native-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-const wemgoLogo = require('../assets/icons/logo.png'); // Ajusta la ruta si es necesario
+
 import { useNavigation } from '@react-navigation/native';
+import { postHttpsStories } from '../api/axios';
+import MediaPreviewModal from '../components/MediaPreviewModal';
 
 const AddStory = () => {
   const navigation = useNavigation();
@@ -26,23 +26,36 @@ const AddStory = () => {
   const [zoom, setZoom] = useState(0);
   const startYRef = useReactRef(null);
   const startZoomRef = useRef(0);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+const [selectedMedia, setSelectedMedia] = useState([]); // Aunque sea uno, usaremos un array
+const [caption, setCaption] = useState('');
+const wemgoLogo = require('../assets/icons/logo.png'); 
 
   const [permissionStatus, setPermissionStatus] = useState('');
-  useEffect(() => {
-    (async () => {
-      const currentStatus = await Camera.getCameraPermissionStatus();
-      setPermissionStatus(currentStatus);
-      console.log('Camera permission before request:', currentStatus);
-      if (currentStatus !== 'authorized' && currentStatus !== 'granted') {
-        const status = await Camera.requestCameraPermission();
-        setHasPermission(status === 'authorized' || status === 'granted');
-        setPermissionStatus(status);
-        console.log('Camera permission after request:', status);
-      } else {
-        setHasPermission(true);
-      }
-    })();
-  }, []);
+useEffect(() => {
+  (async () => {
+    const cameraStatus = await Camera.getCameraPermissionStatus();
+    const micStatus = await Camera.getMicrophonePermissionStatus();
+
+    if (cameraStatus !== 'authorized') {
+      const newCameraStatus = await Camera.requestCameraPermission();
+      console.log('📷 Permiso cámara:', newCameraStatus);
+    }
+
+    if (micStatus !== 'authorized') {
+      const newMicStatus = await Camera.requestMicrophonePermission();
+      console.log('🎙️ Permiso micrófono:', newMicStatus);
+    }
+
+    const finalCamera = await Camera.getCameraPermissionStatus();
+    const finalMic = await Camera.getMicrophonePermissionStatus();
+    const granted = finalCamera === 'authorized' && finalMic === 'authorized';
+
+    setHasPermission(granted);
+    setPermissionStatus(granted ? 'authorized' : 'denied');
+  })();
+}, []);
+
 
   const toggleCamera = () => {
     setCameraPosition((prev) => (prev === 'back' ? 'front' : 'back'));
@@ -55,7 +68,14 @@ const AddStory = () => {
         flash: 'off',
         qualityPrioritization: 'quality',
       });
-      setMediaUri(`file://${photo.path}`);
+      setSelectedMedia([
+  {
+    uri: `file://${photo.path}`,
+    type: 'image/jpeg',
+    fileName: `photo_${Date.now()}.jpg`,
+  },
+]);
+setShowPreviewModal(true);
       setMediaType('photo');
     } catch (error) {
       console.error('❌ Error al tomar la foto:', error);
@@ -70,12 +90,20 @@ const AddStory = () => {
         flash: 'off',
         audio: true,
         onRecordingFinished: (video) => {
-          setMediaUri(`file://${video.path}`);
+          setSelectedMedia([
+  {
+    uri: `file://${video.path}`,
+    type: 'video/mp4',
+    fileName: `video_${Date.now()}.mp4`,
+  },
+]);
+setShowPreviewModal(true);
           setMediaType('video');
           setIsRecording(false);
           setZoom(0);
         },
         onRecordingError: (error) => {
+          console.log(error)
           setIsRecording(false);
           setZoom(0);
           Alert.alert('Error', 'No se pudo grabar el video');
@@ -125,26 +153,20 @@ const AddStory = () => {
   };
 
   const handleUpload = async () => {
-    if (!mediaUri) return;
+    if (!selectedMedia || selectedMedia.length === 0) return;
     try {
       setIsUploading(true);
-      const authToken = await AsyncStorage.getItem('authToken');
+       const media = selectedMedia[0];
       const formData = new FormData();
-      formData.append('story', {
-        uri: mediaUri,
-        type: mediaType === 'photo' ? 'image/jpeg' : 'video/mp4',
-        name: mediaType === 'photo' ? 'image.jpg' : 'video.mp4',
-      });
-      const response = await fetch('https://wemgo.online/wemgo/stories', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
-      });
-      const data = await response.json();
-      console.log('✅ Subido:', data);
+     formData.append('story', {
+      uri: media.uri,
+      type: media.type,
+      name: media.fileName || (media.type?.startsWith('image') ? 'image.jpg' : 'video.mp4'),
+    });
+    formData.append('caption', caption);
+      await postHttpsStories('stories', formData, true); 
+      
+    
       Alert.alert('Listo', 'Historia subida correctamente');
       navigation.goBack();
     } catch (error) {
@@ -158,7 +180,8 @@ const AddStory = () => {
   const openGallery = () => {
     launchImageLibrary({ mediaType: 'mixed' }, (response) => {
       if (response.assets?.[0]) {
-        setMediaUri(response.assets[0].uri);
+        setSelectedMedia([response.assets[0]]);
+       setShowPreviewModal(true);
         const type = response.assets[0].type;
         if (type && type.startsWith('video')) {
           setMediaType('video');
@@ -171,14 +194,7 @@ const AddStory = () => {
     });
   };
 
-  if (!hasPermission) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.text}>Solicitando permiso de cámara...</Text>
-        <Text style={styles.text}>Estado: {permissionStatus}</Text>
-      </View>
-    );
-  }
+
 
   if (!Array.isArray(devices) || devices.length === 0) {
     return (
@@ -196,51 +212,11 @@ const AddStory = () => {
     );
   }
 
-  // Preview de foto o video pantalla completa
-  if (mediaUri) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
-        {/* Botón X para repetir */}
-        <View style={{ position: 'absolute', top: Platform.OS === 'ios' ? 60 : 30, right: 20, zIndex: 10 }}>
-          <Text
-            onPress={() => { setMediaUri(null); setMediaType(null); }}
-            style={{ color: '#fff', fontSize: 32, fontWeight: 'bold', padding: 8 }}
-          >✕</Text>
-        </View>
-        {/* Media preview */}
-        {mediaType === 'photo' ? (
-          <Image source={{ uri: mediaUri }} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
-        ) : (
-          <Video
-            source={{ uri: mediaUri }}
-            style={{ width: '100%', height: '100%' }}
-            controls
-            resizeMode="contain"
-            muted={false}
-            volume={1}
-            ignoreSilentSwitch="ignore"
-            paused={false}
-            playInBackground={false}
-            playWhenInactive={false}
-          />
-        )}
-        {/* Botón Wemgo para subir (morado, logo, central) */}
-        <View style={{ position: 'absolute', bottom: 60, left: 0, right: 0, alignItems: 'center', zIndex: 10 }}>
-          <TouchableOpacity
-            onPress={handleUpload}
-            disabled={isUploading}
-
-          >
-            <Image source={wemgoLogo} style={{ width: 70, height: 70, resizeMode: 'contain', borderRadius: 40, }} />
-            {isUploading && <ActivityIndicator color="#fff" style={{ position: 'absolute' }} />}
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+ 
 
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
+    
       <Camera
         style={StyleSheet.absoluteFill}
         device={device}
@@ -268,13 +244,32 @@ const AddStory = () => {
   activeOpacity={0.8}
   {...panResponder.panHandlers}
 >
-  <View style={[styles.innerCircle, isRecording ? { backgroundColor: '#e74c3c' } : {}]} />
+ <Image
+     source={wemgoLogo}
+     style={{
+       width: 50,
+       height: 50,
+       borderRadius: 25,
+       resizeMode: 'contain',
+       tintColor: isRecording ? '#e74c3c' : undefined,
+     }}
+   />
 </TouchableOpacity>
 
         <TouchableOpacity onPress={toggleCamera} style={styles.iconButton}>
           <Ionicons name="camera-reverse" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
+      <MediaPreviewModal
+  visible={showPreviewModal}
+  onClose={() => setShowPreviewModal(false)}
+  selectedMedia={selectedMedia}
+  setSelectedMedia={setSelectedMedia}
+  caption={caption}
+  setCaption={setCaption}
+  onUpload={handleUpload}
+  isUploading={isUploading}
+/>
     </View>
   );
 };

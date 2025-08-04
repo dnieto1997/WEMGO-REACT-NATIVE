@@ -48,6 +48,7 @@ const FeedCard = React.memo(
     showFullDescription,
     setShowFullDescription,
     visibleFeedId, 
+    isScreenFocused,
     isModalVisible
    
   }) => {
@@ -75,6 +76,7 @@ const FeedCard = React.memo(
     }
   
     const hasSentView = useRef(false);
+    const [showToggle, setShowToggle] = useState(false);
    useEffect(() => {
   if (feed.feed_isVideo !== "1" && feed.feed_isVideo !== 1) return;
 
@@ -171,18 +173,19 @@ const FeedCard = React.memo(
 
         {/* Media */}
         <View style={{flexDirection: 'row'}}>
-          <View style={styles.contentRow}></View>
+          
           <View style={styles.imageContainer}>
             <MediaCarousel
               images={images}
               thumbnails={thumbnails}
               feedId={feed.feed_id}
               visibleFeedId={visibleFeedId}
-              isScreenFocused={true} // o pásalo desde props
+              isScreenFocused={isScreenFocused} // o pásalo desde props
               setCurrentImages={setCurrentImages}
               setImageIndex={setImageIndex}
               setImageViewVisible={setImageViewVisible}
                 isModalVisible={isModalVisible}
+             
             />
           </View>
         </View>
@@ -229,51 +232,51 @@ const FeedCard = React.memo(
         </View>
 
         {/* Descripción */}
-        <View
-          style={[
-            styles.descriptionContainer,
-            feed.feed_description?.length > 50 && {marginTop: 35},
-          ]}>
-          <TouchableOpacity
-            onPress={() => {
-              if (DataUser.id === feed.userId) {
-                navigation.navigate('Profile');
-              } else {
-                navigation.navigate('FriendTimeline', {id: feed.userId});
-              }
-            }}>
-            <Text
-              style={[styles.profileName, {flexWrap: 'wrap'}]}
-              numberOfLines={1}
-              ellipsizeMode="tail">
-              {feed.users_first_name
-                ? `${feed.users_first_name} ${feed.users_last_name}`
-                : 'Anónimo'}
-            </Text>
-          </TouchableOpacity>
+      <View style={styles.descriptionContainer}>
+  <TouchableOpacity
+    onPress={() => {
+      if (DataUser.id === feed.userId) {
+        navigation.navigate('Profile');
+      } else {
+        navigation.navigate('FriendTimeline', {id: feed.userId});
+      }
+    }}>
+    <Text
+      style={[styles.profileName, {flexWrap: 'wrap'}]}
+      numberOfLines={1}
+      ellipsizeMode="tail">
+      {feed.users_first_name
+        ? `${feed.users_first_name} ${feed.users_last_name}`
+        : 'Anónimo'}
+    </Text>
+  </TouchableOpacity>
 
-          <Text
-            style={[styles.eventAddress, {flexWrap: 'wrap'}]}
-            numberOfLines={showFullDescription ? undefined : 2}
-            ellipsizeMode={showFullDescription ? undefined : 'tail'}>
-            {feed.feed_description}
-          </Text>
+  <Text
+    style={[styles.eventAddress, {flexWrap: 'wrap'}]}
+    numberOfLines={showFullDescription ? undefined : 2}
+    ellipsizeMode="tail"
+    onTextLayout={(e) => {
+      // Detecta si el texto se corta en más de 2 líneas
+      if (e.nativeEvent.lines.length > 2 && !showToggle) {
+        setShowToggle(true);
+      }
+    }}>
+    {feed.feed_description}
+  </Text>
 
-          {feed.feed_description?.length > 50 && (
-            <TouchableOpacity
-              onPress={() => setShowFullDescription(!showFullDescription)}>
-              <Text style={styles.toggleText}>
-                {showFullDescription ? 'Ver menos' : 'Ver más'}
-              </Text>
-            </TouchableOpacity>
-          )}
+  {showToggle && (
+    <TouchableOpacity onPress={() => setShowFullDescription(!showFullDescription)}>
+      <Text style={styles.toggleText}>
+        {showFullDescription ? 'Ver menos' : 'Ver más'}
+      </Text>
+    </TouchableOpacity>
+  )}
 
-          <Text style={styles.timeAgoText}>
-            {feed.feed_date_publication
-              ? timeAgo(feed.feed_date_publication)
-              : ''}
-          </Text>
-        </View>
+  <Text style={styles.timeAgoText}>
+    {feed.feed_date_publication ? timeAgo(feed.feed_date_publication) : ''}
+  </Text>
+</View>
+
 
         <View style={styles.separator} />
       </View>

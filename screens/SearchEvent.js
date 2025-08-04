@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,9 @@ import {
   SafeAreaView,
   Modal,
 } from 'react-native';
-import {useFocusEffect, useNavigation} from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import {getHttps} from '../api/axios';
+import { getHttps } from '../api/axios';
 import HeaderwithLogoandIcons from '../components/Headerwithlogoandicons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +21,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import RNPickerSelect from 'react-native-picker-select';
 import MonthlyCalendar from '../components/MonthlyCalendar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const groupEventsByDate = events => {
   return events.reduce((acc, event) => {
@@ -60,20 +61,20 @@ const getMonthCalendarDates = () => {
 const getWeekDates = () => {
   const today = new Date();
   const firstDay = today.getDate() - today.getDay();
-  return Array.from({length: 7}, (_, i) => {
+  return Array.from({ length: 7 }, (_, i) => {
     const date = new Date(today);
     date.setDate(firstDay + i);
     return {
-      label: date.toLocaleDateString('es-ES', {day: '2-digit', month: 'long'}),
+      label: date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long' }),
       day: date.getDate(),
       iso: date.toISOString().split('T')[0],
     };
   });
 };
 
-const EventCard = ({event, navigation}) => (
+const EventCard = ({ event, navigation }) => (
   <TouchableOpacity
-    onPress={() => navigation.navigate('EventDetails', {id: event.id})}
+    onPress={() => navigation.navigate('EventDetails', { id: event.id })}
     style={styles.eventCardNew}>
     <View style={styles.eventDetails}>
       <Text numberOfLines={2} style={styles.eventNameNew}>
@@ -106,21 +107,22 @@ const SearchEvent = () => {
   const [endDate, setEndDate] = useState(new Date());
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const insets = useSafeAreaInsets();
 
 
   const eventTypes = [
-    {label: 'Películas', value: 'movie'},
-    {label: 'Festival', value: 'festival'},
-    {label: 'Comida', value: 'food'},
-    {label: 'Música', value: 'music'},
-    {label: 'Teatro', value: 'theather'},
-    {label: 'Deporte', value: 'sport'},
-    {label: 'Juegos', value: 'games'},
-    {label: 'Turismo', value: 'touring'},
-    {label: 'Fiesta', value: 'party'},
-    {label: 'Playa', value: 'beach'},
-    {label: 'Cultura', value: 'culture'},
-    {label: 'Networking', value: 'internet'},
+    { label: 'Películas', value: 'movie' },
+    { label: 'Festival', value: 'festival' },
+    { label: 'Comida', value: 'food' },
+    { label: 'Música', value: 'music' },
+    { label: 'Teatro', value: 'theather' },
+    { label: 'Deporte', value: 'sport' },
+    { label: 'Juegos', value: 'games' },
+    { label: 'Turismo', value: 'touring' },
+    { label: 'Fiesta', value: 'party' },
+    { label: 'Playa', value: 'beach' },
+    { label: 'Cultura', value: 'culture' },
+    { label: 'Networking', value: 'internet' },
   ];
   const loadUserData = async () => {
     try {
@@ -157,7 +159,6 @@ const SearchEvent = () => {
     }
   };
 
-
   const fetchEvents = async () => {
     try {
       const response = await getHttps('event/searchbyinterest');
@@ -182,19 +183,18 @@ const SearchEvent = () => {
     }
   };
 
-    const handleRefreshHeader = () => {
- 
-};
+  const handleRefreshHeader = () => {
+
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchEvents();
       loadUserData();
       handleRefreshHeader();
-  
+
     }, []),
   );
-
-
 
   const mostrarModal = () => {
     setSearchModalVisible(true);
@@ -204,6 +204,7 @@ const SearchEvent = () => {
     setStartDate(null);
     setEndDate(null);
   };
+
   const cerrarModal = () => {
     setSearchModalVisible(false);
     setQuery('');
@@ -215,9 +216,9 @@ const SearchEvent = () => {
   );
 
   const renderWeekEvents = () => (
-    <SafeAreaView style={{flex: 1, backgroundColor: '#121212'}}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#121212' }}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {calendarDates.map(({label, day, iso}) => (
+        {calendarDates.map(({ label, day, iso }) => (
           <View key={iso} style={styles.eventRow}>
             {/* Fecha del día (lado izquierdo con fondo especial) */}
             <View
@@ -229,7 +230,7 @@ const SearchEvent = () => {
               <Text style={styles.monthText}>{label.split(' ')[2]}</Text>
             </View>
 
-            <View style={{margin: 9}} />
+            <View style={{ margin: 9 }} />
             <View style={styles.cardContainer}>
               {eventsByDate[iso]?.length ? (
                 eventsByDate[iso].map(event => (
@@ -245,16 +246,16 @@ const SearchEvent = () => {
             </View>
           </View>
         ))}
-        <View style={{margin: 35}} />
+        <View style={{ margin: 35 }} />
       </ScrollView>
     </SafeAreaView>
   );
   return (
-    <View style={{flex: 1, backgroundColor: '#000'}}>
-      <View style={{marginTop: 15}} />
-      <HeaderwithLogoandIcons onRefresh={handleRefreshHeader}/>
+    <View style={{ flex: 1, backgroundColor: '#000', paddingTop: insets.top - 15 }}>
+      <View style={{ marginTop: 15 }} />
+      <HeaderwithLogoandIcons onRefresh={handleRefreshHeader} />
 
-      <View style={{marginTop: 30}} />
+      <View style={{ marginTop: 30 }} />
 
       {/* Tabs */}
       <View style={styles.tabContainer}>
@@ -294,7 +295,7 @@ const SearchEvent = () => {
           )} */}
         </View>
       </View>
-      <View style={{marginEnd: 10}}>
+      <View style={{ marginEnd: 10 }}>
         <Text style={styles.textEvent}>
           ¡Te podrían interesar estos eventos!
         </Text>
@@ -308,7 +309,7 @@ const SearchEvent = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             {/* Input de búsqueda con ícono */}
-            <View style={[styles.searchContainer, {marginBottom: 12}]}>
+            <View style={[styles.searchContainer, { marginBottom: 12 }]}>
               <View
                 style={{
                   flexDirection: 'row',
@@ -321,12 +322,12 @@ const SearchEvent = () => {
                   name="search"
                   size={20}
                   color="#aaa"
-                  style={{marginRight: 8}}
+                  style={{ marginRight: 8 }}
                 />
                 <TextInput
-                  style={[styles.input, {flex: 1, color: '#fff'}]}
+                  style={[styles.input, { flex: 1,backgroundColor:"#222"}]}
                   placeholder="Buscar eventos..."
-                  placeholderTextColor="#aaa"
+                  placeholderTextColor="white"
                   value={query}
                   onChangeText={handleSearch}
                   autoFocus
@@ -335,22 +336,22 @@ const SearchEvent = () => {
             </View>
 
             {/* Select tipo de evento */}
-            <View style={{marginBottom: 12}}>
+            <View style={{ marginBottom: 12 }}>
               <RNPickerSelect
                 onValueChange={value => setSelectedType(value)}
                 value={selectedType}
-                placeholder={{label: 'Seleccionar tipo de evento', value: null}}
+                placeholder={{ label: 'Seleccionar tipo de evento', value: null }}
                 items={eventTypes}
                 style={{
                   inputAndroid: {
                     color: '#fff',
-                    backgroundColor: '#333',
+                    backgroundColor: '#222',
                     padding: 12,
                     borderRadius: 10,
                   },
                   inputIOS: {
                     color: '#fff',
-                    backgroundColor: '#333',
+                    backgroundColor: '#222',
                     padding: 12,
                     borderRadius: 10,
                   },
@@ -370,11 +371,11 @@ const SearchEvent = () => {
                 style={{
                   flex: 1,
                   marginRight: 5,
-                  backgroundColor: '#333',
+                  backgroundColor: '#222',
                   padding: 10,
                   borderRadius: 10,
                 }}>
-                <Text style={{color: '#fff', textAlign: 'center'}}>
+                <Text style={{ color: '#fff', textAlign: 'center' }}>
                   Desde:{' '}
                   {startDate ? startDate.toLocaleDateString() : 'Seleccionar'}
                 </Text>
@@ -385,11 +386,11 @@ const SearchEvent = () => {
                 style={{
                   flex: 1,
                   marginLeft: 5,
-                  backgroundColor: '#333',
+                  backgroundColor: '#222',
                   padding: 10,
                   borderRadius: 10,
                 }}>
-                <Text style={{color: '#fff', textAlign: 'center'}}>
+                <Text style={{ color: '#fff', textAlign: 'center' }}>
                   Hasta:{' '}
                   {endDate ? endDate.toLocaleDateString() : 'Seleccionar'}
                 </Text>
@@ -421,7 +422,7 @@ const SearchEvent = () => {
             )}
 
             {/* Resultados */}
-            <ScrollView style={{marginTop: 10}}>
+            <ScrollView style={{ marginTop: 10 }}>
               {eventos
                 .filter(evento =>
                   query
@@ -441,10 +442,10 @@ const SearchEvent = () => {
                       style={styles.resultCard}
                       onPress={() => {
                         setSearchModalVisible(false);
-                        navigation.navigate('EventDetails', {id: evento.id});
+                        navigation.navigate('EventDetails', { id: evento.id });
                       }}>
                       <Image
-                        source={{uri: images[0]}}
+                        source={{ uri: images[0] }}
                         style={styles.resultImage}
                       />
                       <View style={styles.resultInfo}>
@@ -509,7 +510,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     shadowColor: '#000',
     shadowOpacity: 0.1,
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 3,
   },
@@ -518,7 +519,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: '#222',
     paddingBottom: 4,
   },
   dateLabelText: {
@@ -728,7 +729,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxHeight: '90%',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 4},
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 10,
@@ -736,7 +737,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#333',
+    backgroundColor: '#222',
     borderRadius: 10,
     paddingHorizontal: 10,
   },

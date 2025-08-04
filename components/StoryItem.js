@@ -7,11 +7,12 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import Video from 'react-native-video';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import FastImage from 'react-native-fast-image';
 
 const {width, height} = Dimensions.get('window');
 
@@ -28,11 +29,12 @@ const StoryItem = ({
   navigation,
   setIsCurrentVideo,
   videoRef,
- 
+  onVideoLoad,
 }) => {
   const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
   const [DataUser, setDataUser] = useState({});
   const animationRef = useRef(null);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
 
   const rotateY = scrollX.interpolate({
     inputRange,
@@ -46,9 +48,6 @@ const StoryItem = ({
     extrapolate: 'clamp',
   });
 
-  
-  
-
   // Detener la barra de progreso cuando se pausa
   useEffect(() => {
     if (isPaused && animationRef.current) {
@@ -56,32 +55,35 @@ const StoryItem = ({
     }
   }, [isPaused]);
 
-    useEffect(() => {
-      const loadUserData = async () => {
-        try {
-          const data = await AsyncStorage.getItem('userData');
-          if (data) {
-            const parsedData = JSON.parse(data);
-            setDataUser(parsedData);
-          }
-        } catch (error) {
-          console.error('Error fetching user data:', error);
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const data = await AsyncStorage.getItem('userData');
+        if (data) {
+          const parsedData = JSON.parse(data);
+          setDataUser(parsedData);
         }
-      };
-      loadUserData();
-    }, []);
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+    loadUserData();
+  }, []);
 
-   const navigateToProfile = (userId) => {
-  if (DataUser?.id === userId) {
-    navigation.navigate('Profile');
-  } else {
-    navigation.navigate('FriendTimeline', { id: userId });
-  }
-};
+  const navigateToProfile = userId => {
+    if (DataUser?.id === userId) {
+      navigation.navigate('Profile');
+    } else {
+      navigation.navigate('FriendTimeline', {id: userId});
+    }
+  };
 
   return (
     <Animated.View
       style={[styles.storyContainer, {transform: [{rotateY}, {scale}]}]}>
+      {!mediaLoaded && (
+        <ActivityIndicator size="large" color="#fff" style={styles.spinner} />
+      )}
       {isVideo(item.storyUrl) && currentIndex === index ? (
         <Video
           ref={videoRef}
@@ -92,29 +94,10 @@ const StoryItem = ({
           paused={isPaused}
           muted={false}
           onLoad={meta => {
+            setMediaLoaded(true);
             const durationMs = (meta.duration || 0) * 1000;
-
-            if (
-              currentIndex === index &&
-              item.id &&
-              durationMs >= 1000 &&
-              !isAnimationPaused &&
-              !isPaused
-            ) {
-              progress.setValue(0);
-              progress.stopAnimation();
-
-              animationRef.current = Animated.timing(progress, {
-                toValue: 1,
-                duration: durationMs,
-                useNativeDriver: false,
-              });
-
-              animationRef.current.start(({finished}) => {
-                if (finished && !isAnimationPaused && !isPaused) {
-                  goToNextStory();
-                }
-              });
+            if (onVideoLoad) {
+              onVideoLoad(durationMs);
             }
           }}
           onEnd={() => {
@@ -126,49 +109,48 @@ const StoryItem = ({
           }}
         />
       ) : (
-        <Image source={{uri: item.storyUrl}} style={styles.storyImage} />
+        <FastImage
+          source={{uri: item.storyUrl}}
+          style={styles.storyImage}
+          onLoadEnd={() => {
+            setMediaLoaded(true);
+          }}
+        />
       )}
 
-      
-<View style={styles.header}>
-  <TouchableOpacity onPress={() => navigateToProfile(item.user.id)}>
-  <View style={styles.userInfo}>
-          
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigateToProfile(item.user.id)}>
+          <View style={styles.userInfo}>
+            <FastImage
+              source={{uri: item.user.img}}
+              style={styles.profileImage}
+            />
+            <View style={styles.usernameContainer}>
+              <View style={styles.nameRow}>
+                <Text style={styles.username}>
+                  {item.user.first_name.toLowerCase()}
+                  {item.user.last_name.toLowerCase()}
+                </Text>
 
-            <Image source={{uri: item.user.img}} style={styles.profileImage} />
-          <View style={styles.usernameContainer}>
-          
-            <View style={styles.nameRow}>
-            
-              <Text style={styles.username}>
-                {item.user.first_name.toLowerCase()}
-                {item.user.last_name.toLowerCase()}
-              </Text>
+                {item.user.checked === '1' && (
+                  <MaterialIcons
+                    name="verified"
+                    size={14}
+                    color="#fff"
+                    style={styles.verifiedIcon}
+                  />
+                )}
 
-              {item.user.checked === '1' && (
-                <MaterialIcons
-                  name="verified"
-                  size={14}
-                  color="#fff"
-                  style={styles.verifiedIcon}
-                />
-              )}
-
-              <Text style={styles.timeTextInline}>{item.time_label}</Text>
+                <Text style={styles.timeTextInline}>{item.time_label}</Text>
+              </View>
             </View>
           </View>
-    
-          
-        </View>
-  </TouchableOpacity>
-      
+        </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={24} color="white" />
         </TouchableOpacity>
       </View>
-      
-      
 
       {item.caption ? (
         <View style={styles.captionContainer}>
@@ -185,6 +167,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     perspective: 1500,
+  },
+  spinner: {
+    position: 'absolute',
+    top: height / 2 - 20,
+    left: width / 2 - 20,
+    zIndex: 100,
   },
   storyImage: {
     width,
@@ -217,7 +205,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 17,
     fontFamily: 'Poppins-Bold',
-    
   },
   verifiedIcon: {
     marginLeft: 4,

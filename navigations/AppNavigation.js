@@ -71,9 +71,13 @@ import {
   DetailsParches,
   ChatParche,
   AddPublicParche,
+  ShareTypeScreen,
+  Reels,
+  CreateReel,
 } from '../screens';
 import BottomTabNavigation from './BottomTabNavigation';
 import {navigationRef} from '../utils/NavigationService';
+import DetailsGroups from '../screens/DetailsGroups';
 
 const Stack = createNativeStackNavigator();
 
@@ -138,10 +142,11 @@ const AppNavigation = () => {
         <Stack.Screen name="Post" component={Post} />
         <Stack.Screen name="CreateEventV2" component={CreateEventV2} />
         <Stack.Screen name="CreatePassword" component={CreatePassword} />
+         <Stack.Screen name="ShareTypeScreen" component={ShareTypeScreen} />
 
         <Stack.Screen name="EventDetails" component={EventDetails} />
         <Stack.Screen name="Notifications" component={Notifications} />
-
+<Stack.Screen name="DetailsGroups" component={DetailsGroups} />
         <Stack.Screen name="Followers" component={Followers} />
         <Stack.Screen name="ForgetPassword" component={ForgetPassword} />
         <Stack.Screen name="PublicPatchScreen" component={PublicPatchScreen} />
@@ -149,6 +154,7 @@ const AppNavigation = () => {
           name="PrivatePatchScreen"
           component={PrivatePatchScreen}
         />
+          <Stack.Screen name="CreateReel" component={CreateReel} />
         <Stack.Screen name="DetailsParches" component={DetailsParches} />
         <Stack.Screen name="ChatParche" component={ChatParche} />
         <Stack.Screen name="AddPublicParche" component={AddPublicParche} />
@@ -161,6 +167,7 @@ const AppNavigation = () => {
         <Stack.Screen name="Gender" component={Gender} />
         <Stack.Screen name="GroupVideoCall" component={GroupVideoCall} />
         <Stack.Screen name="Interests" component={Interests} />
+        <Stack.Screen name="Reels" component={Reels}   options={{ unmountOnBlur: true }} />
 
         <Stack.Screen name="Login" component={Login} />
 

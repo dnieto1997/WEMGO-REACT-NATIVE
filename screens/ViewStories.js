@@ -8,19 +8,14 @@ import React, {
 import {
   View,
   Text,
-  Image,
-  TouchableOpacity,
   ActivityIndicator,
-  TextInput,
   StyleSheet,
   Dimensions,
-  FlatList,
   Animated,
   TouchableWithoutFeedback,
-  Modal,
-  SafeAreaView,
   Alert,
   Keyboard,
+  PanResponder,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,12 +26,9 @@ import {
   postHttps,
 } from '../api/axios';
 import {launchImageLibrary} from 'react-native-image-picker';
-
 import {SocketContext} from '../context/SocketContext';
-
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
-
 import ProgressBars from '../components/ProgressBars';
 import StoryItem from '../components/StoryItem';
 import ConfigBar from '../components/ConfigBar';
@@ -62,15 +54,7 @@ const ViewStories = ({route}) => {
   const [isCurrentVideo, setIsCurrentVideo] = useState(false);
   const [userStoryGroups, setUserStoryGroups] = useState([]);
   const activeAudioIndexRef = useRef(null);
-  const {
-    socket,
-    sendMessage,
-    setChatActive,
-    removeChatActive,
-    sendMessageStory,
-  } = useContext(SocketContext);
-  const animation = useRef(new Animated.Value(0)).current;
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const {socket, sendMessageStory} = useContext(SocketContext);
   const [isPaused, setIsPaused] = useState(false);
   const [showSentFeedback, setShowSentFeedback] = useState(false);
   const [sendingStatus, setSendingStatus] = useState(null);
@@ -81,7 +65,6 @@ const ViewStories = ({route}) => {
   const [ViewUsers, setViewUsers] = useState({});
   const [ViewUsers2, setViewUsers2] = useState({});
   const insets = useSafeAreaInsets();
-
   const currentIndexRef = useRef(currentIndex);
   const [isSending, setIsSending] = useState(false);
   const [openModal, setOpenModal] = useState(false);
@@ -89,17 +72,20 @@ const ViewStories = ({route}) => {
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [inputHeight, setInputHeight] = useState(40);
   const [hasReacted, setHasReacted] = useState(false);
-
   const flatListRef = useRef(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const progress = useRef(new Animated.Value(0)).current;
-
   const duration = 5000; // o el tiempo total por historia
   const animationRef = useRef(null);
   const storyTimerRef = useRef(null);
   const progressValueRef = useRef(0);
   const shouldPauseAnimation = useRef(false);
   const hasEndedRef = useRef(false);
+  const pan = useRef(new Animated.ValueXY()).current;
+  const videoDurationRef = useRef(0);
+  const isVideoLoadedRef = useRef(false);
+  const viewedStoryIds = useRef(new Set());
+
 
   const pickImage = async () => {
     launchImageLibrary({}, response => {
@@ -184,26 +170,48 @@ const ViewStories = ({route}) => {
     };
   }, []);
 
-  const startProgressAnimation = (customDuration = duration) => {
-    progress.setValue(0);
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        pan.setValue({x: 0, y: gestureState.dy});
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100) {
+          navigation.goBack(); // 👈 Cerrar la historia al deslizar hacia abajo
+        } else {
+          Animated.spring(pan, {
+            toValue: {x: 0, y: 0},
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    }),
+  ).current;
 
-    animationRef.current = Animated.timing(progress, {
-      toValue: 1,
-      duration: customDuration,
-      useNativeDriver: false,
-    });
+  const startProgressAnimation = () => {
+    const currentStory = stories[currentIndex];
+    const isImage = !isVideo(currentStory?.storyUrl);
+    const duration = isImage ? 5000 : videoDurationRef.current || 0;
 
-    animationRef.current.start(({finished}) => {
-      if (finished && !isPaused) {
-        goToNextStory();
-      }
-    });
+    const elapsed = progressValueRef.current || 0;
+    const remaining = duration - elapsed;
 
-    progress.addListener(({value}) => {
-      progressValueRef.current = value * duration;
-    });
+    if (remaining > 0 && !shouldPauseAnimation.current) {
+      animationRef.current = Animated.timing(progress, {
+        toValue: 1,
+        duration: remaining,
+        useNativeDriver: false,
+      });
 
-    storyTimerRef.current = setTimeout(() => {}, customDuration);
+      animationRef.current.start(({finished}) => {
+        if (finished && !shouldPauseAnimation.current) {
+          goToNextStory();
+        }
+      });
+    }
   };
 
   useEffect(() => {
@@ -217,14 +225,21 @@ const ViewStories = ({route}) => {
       const response = await getHttps(`stories/find/${DataUser.id}`);
       const apiStories = response.data;
 
-      console.log('Fetched stories:', JSON.stringify(apiStories));
-
       if (!Array.isArray(apiStories) || apiStories.length === 0) {
+        console.log('⚠️ No hay historias disponibles');
+
+        // 👉 Verifica si el usuario actual es el mismo y no tiene historias
+        if (id === DataUser.id) {
+          navigation.replace('AddStory');
+        } else {
+          navigation.goBack();
+        }
+
         setLoading(false);
         return;
       }
 
-      // Agrupar por usuario
+
       let groupedByUser = apiStories
         .filter(user => Array.isArray(user.stories) && user.stories.length > 0)
         .map(user => {
@@ -245,36 +260,58 @@ const ViewStories = ({route}) => {
           };
         });
 
-      // Si NO es tu perfil, excluye tus historias
+      console.log(
+        '✅ Usuarios agrupados con historias:',
+        groupedByUser.map(g => g.user.id),
+      );
+
+      const originalUserOrder = apiStories
+        .filter(user => Array.isArray(user.stories) && user.stories.length > 0)
+        .map(user => user.user.id);
+
+      console.log('📌 Orden original del JSON:', originalUserOrder);
+
+      groupedByUser.sort(
+        (a, b) =>
+          originalUserOrder.indexOf(a.user.id) -
+          originalUserOrder.indexOf(b.user.id),
+      );
+
+      console.log(
+        '🔄 Orden después de respetar el JSON:',
+        groupedByUser.map(g => g.user.id),
+      );
+
       if (id !== DataUser.id) {
         groupedByUser = groupedByUser.filter(
           group => group.user.id !== DataUser.id,
         );
       }
 
-      // Orden: primero el usuario de la ruta, luego los que tienen historias sin ver, luego los que ya viste todo
-      groupedByUser.sort((a, b) => {
-        if (a.user.id === id) return -1;
-        if (b.user.id === id) return 1;
-        if (!a.viewAllStories && b.viewAllStories) return -1;
-        if (a.viewAllStories && !b.viewAllStories) return 1;
-        return 0;
-      });
+      console.log(
+        '🧾 Orden final de userStoryGroups:',
+        groupedByUser.map(g => g.user.id),
+      );
 
       const currentUserGroup = groupedByUser.find(
         group => group.user.id === id,
       );
-
       if (!currentUserGroup || currentUserGroup.stories.length === 0) {
-        navigation.goBack();
+        console.log('🚫 Usuario actual sin historias → volver');
+
+        if (id === DataUser.id) {
+          navigation.replace('AddStory');
+        } else {
+          navigation.goBack();
+        }
+
         return;
       }
 
       const allStories = groupedByUser.flatMap(group => group.stories);
-
       const hasUnseen = currentUserGroup.stories.some(s => !s.seen);
-      let startingIndex = 0;
 
+      let startingIndex = 0;
       if (hasUnseen) {
         const firstUnseen = currentUserGroup.stories.find(s => !s.seen);
         startingIndex = allStories.findIndex(s => s.id === firstUnseen.id);
@@ -284,13 +321,13 @@ const ViewStories = ({route}) => {
         );
       }
 
-      // 🔴 Si ya viste todas y es el último grupo → salir
       const userIndex = groupedByUser.findIndex(group => group.user.id === id);
       const isLastUser = userIndex === groupedByUser.length - 1;
-      if (currentUserGroup.viewAllStories && isLastUser) {
-        navigation.goBack();
-        return;
-      }
+
+      console.log('🔍 userIndex:', userIndex);
+      console.log('🔚 isLastUser:', isLastUser);
+      console.log('👁️ viewAllStories:', currentUserGroup.viewAllStories);
+      console.log('🎯 startingIndex:', startingIndex);
 
       setIsOwner(currentUserGroup.user.id === DataUser.id);
       setStories(allStories);
@@ -306,14 +343,11 @@ const ViewStories = ({route}) => {
 
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching stories:', error);
+      console.error('❌ Error fetching stories:', error);
       setLoading(false);
     }
   };
 
-
-
-      
   const handleAnimationPauseState = () => {
     const anyModalOpen =
       openModal || openModal2 || editModalVisible || alertVisible;
@@ -354,8 +388,6 @@ const ViewStories = ({route}) => {
     handleAnimationPauseState();
   }, [openModal, openModal2, editModalVisible, alertVisible]);
 
-
-
   const isVideo = url => {
     if (!url) return false;
     return /\.(mp4|mov|m4v|webm)$/i.test(url);
@@ -366,61 +398,44 @@ const ViewStories = ({route}) => {
     navigation.navigate('FriendTimeline', {id});
   };
 
+
   useEffect(() => {
-    currentIndexRef.current = currentIndex;
-  }, [currentIndex]);
-  useEffect(() => {
-    if (!stories.length) return;
+    if (
+      !stories.length ||
+      !stories[currentIndex] ||
+      shouldPauseAnimation.current
+    )
+      return;
 
     const currentStory = stories[currentIndex];
-    if (!currentStory) return;
-
     const isCurrentStoryVideo = isVideo(currentStory.storyUrl);
     const isImage = !isCurrentStoryVideo;
-    const duration = isImage ? 5000 : null;
 
-    // Protege estados
     setIsCurrentVideo(isCurrentStoryVideo);
     setIsOwner(currentStory.user?.id === DataUser.id);
     hasEndedRef.current = false;
     activeAudioIndexRef.current = currentIndex;
 
-    // Limpiar cualquier animación anterior
-    if (animationRef.current) {
-      animationRef.current.stop();
-      animationRef.current = null;
-    }
+    // Detener y resetear progreso
+    if (animationRef.current) animationRef.current.stop();
     progress.setValue(0);
 
-    // Vista (si no es del dueño)
-    if (currentStory.user?.id !== DataUser.id) {
-      postHttps('story-views', {
-        storyid: currentStory.id,
-        user: DataUser.id,
-      }).catch(err => console.log('❌ Error vista:', err));
-    }
-
     if (isImage) {
-      if (openModal || openModal2 || editModalVisible || alertVisible) {
-        console.log('⛔ No iniciar animación: modal abierto');
-        return;
-      }
       animationRef.current = Animated.timing(progress, {
         toValue: 1,
-        duration: duration,
+        duration: 5000,
         useNativeDriver: false,
       });
 
       animationRef.current.start(({finished}) => {
-        if (finished) {
+        if (finished && !shouldPauseAnimation.current) {
           goToNextStory();
         }
       });
+    } else {
+      isVideoLoadedRef.current = false; // 🟡 Esperar onVideoLoad para iniciar animación
     }
-    if (openModal || openModal2 || editModalVisible || alertVisible) {
-      console.log('⛔ No iniciar animación: modal abierto');
-      return;
-    }
+
     return () => {
       if (animationRef.current) {
         animationRef.current.stop();
@@ -429,45 +444,115 @@ const ViewStories = ({route}) => {
     };
   }, [currentIndex, stories, shouldPauseAnimation]);
 
-const goToNextStory = () => {
-  const nextIndex = currentIndex + 1;
+  const goToNextStory = () => {
+    if (!stories || stories.length === 0) {
+      console.log('🛑 No hay historias cargadas aún');
+      return;
+    }
 
-  if (nextIndex >= stories.length) {
+    const currentStory = stories[currentIndex];
+    if (!currentStory || !currentStory.user?.id) {
+      console.log('❌ currentStory o user.id es undefined');
+      return;
+    }
+
+    const currentUserId = currentStory.user.id;
+    const isLastStory = currentIndex >= stories.length - 1;
+
+    console.log('🟡 currentIndex:', currentIndex);
+    console.log('🟡 stories.length:', stories.length);
+    console.log('🟡 currentUserId:', currentUserId);
+
+    if (isLastStory) {
+      console.log('🟥 Última historia global → cerrar');
+      navigation.goBack();
+      return;
+    }
+
+    const nextStory = stories[currentIndex + 1];
+    const nextUserId = nextStory?.user?.id;
+
+    console.log('🟢 nextStory.id:', nextStory?.id);
+    console.log('🟢 nextUserId:', nextUserId);
+
+    let newIndex = currentIndex + 1;
+
+    if (nextUserId !== currentUserId) {
+      const nextGroup = userStoryGroups.find(
+        group => group.user.id === nextUserId,
+      );
+      if (nextGroup) {
+        const firstStoryId = nextGroup.stories[0]?.id;
+        const firstIndex = stories.findIndex(s => s.id === firstStoryId);
+        if (firstIndex !== -1) {
+          newIndex = firstIndex;
+          console.log('🔁 Nuevo índice de historia de otro usuario:', newIndex);
+        }
+      }
+    }
+
+    console.log('➡️ Ir a historia siguiente:', newIndex);
+    setCurrentIndex(newIndex);
+    flatListRef.current?.scrollToIndex({index: newIndex, animated: true});
+    progress.setValue(0);
+  };
+
+  /* 
+const goToPreviousStory = () => {
+  if (currentIndex === 0) {
     navigation.goBack();
     return;
   }
 
-  const nextStory = stories[nextIndex];
-  const currentUserId = stories[currentIndex]?.user?.id;
-  const nextUserId = nextStory?.user?.id;
+  const currentStory = stories[currentIndex];
+  const previousStory = stories[currentIndex - 1];
+  const currentUserId = currentStory?.user?.id;
+  const previousUserId = previousStory?.user?.id;
 
-  const isDifferentUser = currentUserId !== nextUserId;
+  let newIndex = currentIndex - 1;
 
-  if (isDifferentUser) {
-    const currentUserIndex = userStoryGroups.findIndex(group => group.user.id === nextUserId);
-
-    if (currentUserIndex === -1) {
-      setCurrentIndex(nextIndex);
-      return;
-    }
-
-    const isLastUser = currentUserIndex === userStoryGroups.length - 1;
-
-    const allSeen = userStoryGroups[currentUserIndex]?.stories?.every(s => s.seen);
-
-    if (isLastUser && allSeen) {
-      navigation.goBack();
-      return;
+  if (previousUserId !== currentUserId) {
+    const previousGroup = userStoryGroups.find(group => group.user.id === previousUserId);
+    if (previousGroup) {
+      const lastStoryId = previousGroup.stories.at(-1)?.id;
+      const lastIndex = stories.findIndex(s => s.id === lastStoryId);
+      if (lastIndex !== -1) {
+        newIndex = lastIndex;
+      }
     }
   }
 
-  setCurrentIndex(nextIndex);
-  flatListRef.current?.scrollToIndex({
-    index: nextIndex,
-    animated: true,
-  });
+  console.log('⬅️ Ir a historia anterior:', newIndex);
+  setCurrentIndex(newIndex);
+  flatListRef.current?.scrollToIndex({ index: newIndex, animated: true });
+  progress.setValue(0);
 };
+ */
 
+  const startAnimation = () => {
+    const currentStory = stories[currentIndex];
+    if (!currentStory) return;
+
+    const isImage = !isVideo(currentStory.storyUrl);
+    const duration = isImage ? 5000 : videoDurationRef.current || 0;
+
+    if (duration === 0) return; 
+
+    if (animationRef.current) animationRef.current.stop();
+    progress.setValue(0);
+
+    animationRef.current = Animated.timing(progress, {
+      toValue: 1,
+      duration,
+      useNativeDriver: false,
+    });
+
+    animationRef.current.start(({finished}) => {
+      if (finished && !shouldPauseAnimation.current) {
+        goToNextStory();
+      }
+    });
+  };
 
   const handlePressIn = () => {
     setIsPaused(true);
@@ -480,7 +565,23 @@ const goToNextStory = () => {
   const handlePressOut = () => {
     setIsPaused(false);
     shouldPauseAnimation.current = false;
-    // No reinicies aquí. El useEffect se encargará si corresponde.
+
+    const elapsed = progressValueRef.current || 0;
+    const remaining = duration - elapsed;
+
+    if (remaining > 0) {
+      animationRef.current = Animated.timing(progress, {
+        toValue: 1,
+        duration: remaining,
+        useNativeDriver: false,
+      });
+
+      animationRef.current.start(({finished}) => {
+        if (finished && !shouldPauseAnimation.current) {
+          goToNextStory();
+        }
+      });
+    }
   };
 
   const handleLongPress = () => {
@@ -497,7 +598,6 @@ const goToNextStory = () => {
     setIsSending(true);
     try {
       await sendMessageStory({
-        receiver: id,
         content: message,
         storyid: storyId,
       });
@@ -523,11 +623,37 @@ const goToNextStory = () => {
     setInputHeight(40);
   }, [message, id, sendMessageStory]);
 
-  const handleViewableItemsChanged = useRef(({viewableItems}) => {
-    if (viewableItems.length > 0) {
-      setCurrentIndex(viewableItems[0].index);
-    }
-  }).current;
+const handleViewableItemsChanged = ({ viewableItems }) => {
+  if (viewableItems.length === 0) return;
+
+  const visibleItem = viewableItems[0];
+  const visibleIndex = visibleItem.index;
+
+  if (visibleIndex === null || visibleIndex === undefined) return;
+
+  setCurrentIndex(visibleIndex);
+
+  const story = stories[visibleIndex];
+  if (!story || !DataUser?.id) return;
+
+  const isOwner = story.user?.id === DataUser.id;
+  const alreadyViewed = viewedStoryIds.current.has(story.id);
+
+  if (!isOwner && !alreadyViewed) {
+    viewedStoryIds.current.add(story.id);
+
+    postHttps('story-views', {
+      storyid: story.id,
+      user: DataUser.id,
+    })
+      .then(() =>
+        console.log('👁️ Vista registrada correctamente:', story.id),
+      )
+      .catch(err => console.log('❌ Error al registrar la vista:', err));
+  }
+};
+
+
 
   const viewabilityConfig = useRef({
     itemVisiblePercentThreshold: 50,
@@ -577,27 +703,49 @@ const goToNextStory = () => {
 
   const handleTouch = event => {
     const {locationX} = event.nativeEvent;
+    const isLeft = locationX < width / 2;
 
-    setCurrentIndex(prevIndex => {
-      let newIndex;
-      if (locationX < width / 2) {
-        newIndex = Math.max(prevIndex - 1, 0);
-      } else {
-        newIndex = prevIndex + 1 < stories.length ? prevIndex + 1 : prevIndex;
-      }
-
-      setIsOwner(stories[newIndex]?.user?.id === DataUser.id);
-
-      if (newIndex !== prevIndex) {
-        flatListRef.current?.scrollToIndex({index: newIndex, animated: true});
-      } else {
+    if (isLeft) {
+      if (currentIndex === 0) {
         navigation.goBack();
+        return;
       }
 
-      progress.setValue(0);
-      return newIndex;
-    });
+      const currentStory = stories[currentIndex];
+      const previousStory = stories[currentIndex - 1];
+      const currentUserId = currentStory?.user?.id;
+      const previousUserId = previousStory?.user?.id;
+
+      let newIndex = currentIndex - 1;
+
+      if (previousUserId !== currentUserId) {
+        const previousGroup = userStoryGroups.find(
+          group => group.user.id === previousUserId,
+        );
+        if (previousGroup) {
+          const lastStoryId = previousGroup.stories.at(-1)?.id;
+          const lastIndex = stories.findIndex(s => s.id === lastStoryId);
+          if (lastIndex !== -1) newIndex = lastIndex;
+        }
+      }
+
+      setCurrentIndex(newIndex);
+      flatListRef.current?.scrollToIndex({index: newIndex, animated: true});
+      startAnimation(); // ⬅️ Aquí
+    } else {
+      if (currentIndex >= stories.length - 1) {
+        navigation.goBack();
+        return;
+      }
+
+      const newIndex = currentIndex + 1;
+      setCurrentIndex(newIndex);
+      flatListRef.current?.scrollToIndex({index: newIndex, animated: true});
+      startAnimation(); // ⬅️ Aquí
+    }
   };
+
+
 
   const toggleReaction = async () => {
     const storyId = stories[currentIndex].id;
@@ -706,47 +854,6 @@ const goToNextStory = () => {
     }
   };
 
-  useEffect(() => {
-    const anyModalOpen =
-      openModal || openModal2 || editModalVisible || alertVisible;
-
-    if (anyModalOpen) {
-      if (!shouldPauseAnimation.current) {
-        setIsPaused(true);
-        shouldPauseAnimation.current = true;
-
-        if (animationRef.current) {
-          animationRef.current.stop();
-          animationRef.current = null;
-        }
-      }
-    } else {
-      if (shouldPauseAnimation.current) {
-        setIsPaused(false);
-        shouldPauseAnimation.current = false;
-
-        const remaining = duration - (progressValueRef.current || 0);
-        if (remaining > 0) {
-          if (openModal || openModal2 || editModalVisible || alertVisible) {
-            console.log('⛔ No iniciar animación: modal abierto');
-            return;
-          }
-          animationRef.current = Animated.timing(progress, {
-            toValue: 1,
-            duration: remaining,
-            useNativeDriver: false,
-          });
-
-          animationRef.current.start(({finished}) => {
-            if (finished && !shouldPauseAnimation.current) {
-              goToNextStory();
-            }
-          });
-        }
-      }
-    }
-  }, [openModal, openModal2, editModalVisible, alertVisible]);
-
   const handleEditStory = async () => {
     try {
       const storyId = stories[currentIndex].id;
@@ -760,42 +867,39 @@ const goToNextStory = () => {
     }
   };
 
-useFocusEffect(
-  useCallback(() => {
-    // Solo reanudar si no hay modales abiertos
-    if (!openModal && !openModal2 && !editModalVisible && !alertVisible) {
-      setIsPaused(false);
-      shouldPauseAnimation.current = false;
+  useFocusEffect(
+    useCallback(() => {
+      // Solo reanudar si no hay modales abiertos
+      if (!openModal && !openModal2 && !editModalVisible && !alertVisible) {
+        setIsPaused(false);
+        shouldPauseAnimation.current = false;
 
-      const remaining = duration - (progressValueRef.current || 0);
-      if (remaining > 0) {
-        progress.setValue(progressValueRef.current / duration);
-        animationRef.current = Animated.timing(progress, {
-          toValue: 1,
-          duration: remaining,
-          useNativeDriver: false,
-        });
-        animationRef.current.start(({ finished }) => {
-          if (finished && !shouldPauseAnimation.current) {
-            goToNextStory();
-          }
-        });
+        const remaining = duration - (progressValueRef.current || 0);
+        if (remaining > 0) {
+          progress.setValue(progressValueRef.current / duration);
+          animationRef.current = Animated.timing(progress, {
+            toValue: 1,
+            duration: remaining,
+            useNativeDriver: false,
+          });
+          animationRef.current.start(({finished}) => {
+            if (finished && !shouldPauseAnimation.current) {
+              goToNextStory();
+            }
+          });
+        }
       }
-    }
 
-    return () => {
-      // Al salir, pausa
-      setIsPaused(true);
-      shouldPauseAnimation.current = true;
-      if (animationRef.current) {
-        animationRef.current.stop();
-      }
-    };
-  }, [openModal, openModal2, editModalVisible, alertVisible]),
-);
-
-
-
+      return () => {
+        // Al salir, pausa
+        setIsPaused(true);
+        shouldPauseAnimation.current = true;
+        if (animationRef.current) {
+          animationRef.current.stop();
+        }
+      };
+    }, [openModal, openModal2, editModalVisible, alertVisible]),
+  );
 
   if (loading) {
     return (
@@ -811,9 +915,15 @@ useFocusEffect(
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onLongPress={handleLongPress}
-      delayLongPress={300} // opcional
-    >
-      <View style={styles.container}>
+      delayLongPress={300}>
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            transform: [{translateY: pan.y}],
+          },
+        ]}
+        {...panResponder.panHandlers}>
         {stories.length > 0 ? (
           <View style={{flex: 1}}>
             {/* BARRAS DE PROGRESO SOLO DEL USUARIO ACTUAL */}
@@ -832,6 +942,15 @@ useFocusEffect(
               keyExtractor={item =>
                 item.id?.toString() || Math.random().toString()
               }
+              onMomentumScrollEnd={e => {
+                const newIndex = Math.round(
+                  e.nativeEvent.contentOffset.x / width,
+                );
+                if (newIndex !== currentIndex) {
+                  setCurrentIndex(newIndex);
+                  startAnimation(); // ⬅️ Aquí también
+                }
+              }}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
@@ -839,8 +958,10 @@ useFocusEffect(
                 [{nativeEvent: {contentOffset: {x: scrollX}}}],
                 {useNativeDriver: true},
               )}
-              onViewableItemsChanged={handleViewableItemsChanged}
-              viewabilityConfig={viewabilityConfig}
+              
+
+                onViewableItemsChanged={handleViewableItemsChanged}
+               viewabilityConfig={viewabilityConfig}
               snapToInterval={width}
               snapToAlignment="center"
               decelerationRate="fast"
@@ -863,7 +984,13 @@ useFocusEffect(
                   navigation={navigation}
                   setIsCurrentVideo={setIsCurrentVideo}
                   videoRef={videoRef}
-                
+                  onVideoLoad={durationMs => {
+                    if (durationMs > 0) {
+                      videoDurationRef.current = durationMs;
+                      isVideoLoadedRef.current = true;
+                      startAnimation();
+                    }
+                  }}
                 />
               )}
             />
@@ -953,7 +1080,7 @@ useFocusEffect(
             </Text>
           </View>
         )}
-      </View>
+      </Animated.View>
     </TouchableWithoutFeedback>
   );
 };
